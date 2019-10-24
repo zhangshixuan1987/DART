@@ -30,10 +30,10 @@
 # USER SETTINGS HERE
 
 # Set year, month, days for to pass as args to prepbufr.csh
-set year     = 2010
-set month    =   12
-set startday =    1
-set endday   =   30
+set year     = 2009
+set month    =   1
+set startday =   1
+set endday   =   4
 
 # Subdirectory base name.  If running multiple months at the
 # same time, must have different base names.  (could add month
@@ -56,7 +56,7 @@ while ( $day <= $lastday )
    cp -f ../input.nml .
 
    echo starting day $day
-   ./prepbufr.csh $year $month $day $day &
+   ./prepbufr.csh $year $month $day &
 
    cd ..
 

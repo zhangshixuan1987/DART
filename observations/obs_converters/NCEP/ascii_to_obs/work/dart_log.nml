@@ -1,0 +1,31 @@
+ !Starting Program preprocess
+ &UTILITIES_NML
+ TERMLEVEL       =           1,
+ LOGFILENAME     = dart_log.out                                                                                                      
+                                                                                                                                     
+           ,
+ MODULE_DETAILS  = T,
+ NMLFILENAME     = dart_log.nml                                                                                                      
+                                                                                                                                     
+           ,
+ PRINT_DEBUG     = F,
+ WRITE_NML       = file                            
+ /
+ !Finished Program preprocess
+ !Starting Program prepbufr_to_obs
+ &UTILITIES_NML
+ TERMLEVEL       =           1,
+ LOGFILENAME     = dart_log.out                                                                                                      
+                                                                                                                                     
+           ,
+ MODULE_DETAILS  = T,
+ NMLFILENAME     = dart_log.nml                                                                                                      
+                                                                                                                                     
+           ,
+ PRINT_DEBUG     = F,
+ WRITE_NML       = file                            
+ /
+ &OBS_SEQUENCE_NML
+ WRITE_BINARY_OBS_SEQUENCE       = F,
+ READ_BINARY_FILE_FORMAT = native                          
+ /

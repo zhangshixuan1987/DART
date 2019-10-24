@@ -1,0 +1,80 @@
+ 
+ --------------------------------------
+ Starting ... at YYYY MM DD HH MM SS = 
+                 2019 10 17 14 42 35
+ Program preprocess
+ --------------------------------------
+ 
+ 
+ Registering module :
+ $URL$
+ $Revision$
+ $Date$
+ Registration complete.
+ 
+  set_nml_output Echo NML values to log file only
+ 
+ Registering module :
+ $URL$
+ $Revision$
+ $Date$
+ Registration complete.
+ 
+ Path names of default obs_def and obs_kind modules
+ ../../../../../observations/forward_operators/DEFAULT_obs_def_mod.F90
+ ../../../../../assimilation_code/modules/observations/DEFAULT_obs_kind_mod.F90
+ Path names of output obs_def and obs_kind modules
+ ../../../../../observations/forward_operators/obs_def_mod.f90
+ ../../../../../assimilation_code/modules/observations/obs_kind_mod.f90
+ INPUT obs_def files follow:
+ ../../../../../observations/forward_operators/obs_def_reanalysis_bufr_mod.f90
+ ../../../../../observations/forward_operators/obs_def_altimeter_mod.f90
+ ../../../../../observations/forward_operators/obs_def_gps_mod.f90
+ ../../../../../observations/forward_operators/obs_def_dew_point_mod.f90
+ ../../../../../observations/forward_operators/obs_def_rel_humidity_mod.f90
+ INPUT model files follow:
+  preprocess Finished successfully.
+ 
+ --------------------------------------
+ Finished ... at YYYY MM DD HH MM SS = 
+                 2019 10 17 14 42 35
+ Program preprocess
+ --------------------------------------
+ 
+ 
+ --------------------------------------
+ Starting ... at YYYY MM DD HH MM SS = 
+                 2019 10 20 15 35 27
+ Program prepbufr_to_obs
+ --------------------------------------
+ 
+ 
+ Registering module :
+ $URL$
+ $Revision$
+ $Date$
+ Registration complete.
+ 
+  set_nml_output Echo NML values to log file only
+ 
+ Registering module :
+ $URL$
+ $Revision$
+ $Date$
+ Registration complete.
+ 
+ 
+ Registering module :
+ $URL$
+ $Revision$
+ $Date$
+ Registration complete.
+ 
+ ERROR FROM:
+  find_namelist_in_file
+  routine: find_namelist_in_file
+  message:  Namelist entry &prepbufr_to_obs_nml must exist in file input.nml
+ 
+  source file: $URL$
+  file revision: $Revision$
+  revision date: $Date$

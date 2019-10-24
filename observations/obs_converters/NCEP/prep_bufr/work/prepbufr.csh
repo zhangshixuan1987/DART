@@ -83,14 +83,14 @@ endif
 # and/or year have rolled over.
 
 #set BUFR_dir = ../data
-set BUFR_dir  = /glade/p/image/Observations/bufr
+set BUFR_dir  = ${My_BUFR_DATA} #/compyfs/zhan391/acme_init/Observations/PREBUFR
 
 set BUFR_idir = ${BUFR_dir}/prepqm
 set BUFR_odir = ${BUFR_dir}/prepout
 
 
 # directory where DART prepbufr programs are located, relative to here.
-set DART_exec_dir = .
+set DART_exec_dir = /compyfs/zhan391/code/DART_E3SM/observations/obs_converters/NCEP/prep_bufr/exe
 
 # END USER SET PARAMETERS
 #--------------------------------------------------------------
@@ -107,7 +107,7 @@ set hr = "06"
 # year is only last 2 digits (matches filename conventions)
 
 set dtg  = ${year}${mn}${dy}${hr}
-set sdtg = ${yr}${mn}${dy}${hr}
+set sdtg = ${year}${mn}${dy}.t${hr}z
 
 # these files come every 6 hours.
 
@@ -121,10 +121,14 @@ if ($daily == 'yes') then
 endif
 
 set hr_file = 1
+
+# clear any old intermediate (text) files
+rm -f temp_obs 
+
 while ( $hr_file <= $files_per_day )
 
    # clear any old intermediate (text) files
-   rm -f temp_obs prepqm.in prepqm.out 
+   rm -f prepqm.in prepqm.out 
 
    # the prepqm input files.  match general naming pattern with the
    # data time encoded in the filename.  if the pattern of the filename
@@ -132,7 +136,7 @@ while ( $hr_file <= $files_per_day )
    # fix the BUFR_in line below to match what you have.  if the file is
    # gzipped, you can leave it and this program will unzip it before
    # processing it.
-   set BUFR_in = ${BUFR_idir}/prepqm${sdtg}.no_ship_id
+   set BUFR_in = ${BUFR_idir}/prepbufr.gdas.${sdtg}.nr
 
    if ( -e ${BUFR_in} ) then
       echo "copying ${BUFR_in} into prepqm.in"
@@ -223,7 +227,7 @@ while ( $hr_file <= $files_per_day )
    set dy   = `echo $dtg | cut -c 7-8`
    set hr   = `echo $dtg | cut -c 9-10`
 
-   set sdtg = ${yr}${mn}${dy}${hr}
+   set sdtg = ${year}${mn}${dy}.t${hr}z #${yr}${mn}${dy}${hr}
 
 end
 
