@@ -44,7 +44,7 @@ set FILE = $FILE:r
 set ATM_DATE_EXT = `echo $FILE:e`
 
 #=========================================================================
-# As implemented, the input filenames are static in the E3SM namelists.
+# As implemented, the input filenames are static in the E3SM-FV namelists.
 # We must link the new uniquely-named files to static names.
 #=========================================================================
 

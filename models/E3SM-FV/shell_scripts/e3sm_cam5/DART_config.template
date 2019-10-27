@@ -10,17 +10,17 @@
 # Purpose
 # ---------------------
 #
-# This script integrates DART with a pre-existing E3SM multi-instance case.
+# This script integrates DART with a pre-existing E3SM-FV multi-instance case.
 # It must be run from a valid CASEROOT directory and some environment variables
 # must be set (as in e3sm#_#/setup_XXX). 
 #
 # CAM is the only model component used for assimilation.
-# E3SM starts and stops to allow for CAM to assimilate every 6 hours.
+# E3SM-FV starts and stops to allow for CAM to assimilate every 6 hours.
 #
 # This script will try to build the DART executables if they are not found.
 # This might result in a preproc_nml being used, which is wrong for your observation set.
 #
-# There may be E3SM binary files in big-endian format, and DART reads some of them, 
+# There may be E3SM-FV binary files in big-endian format, and DART reads some of them, 
 # so you MUST compile DART accordingly e.g.,
 # ifort -convert big_endian
 # Contact dart@ucar.edu if you want to use another compiler.
@@ -32,10 +32,10 @@
 # -- > cd $CASEROOT
 # -- Script DART_config should have been created there by setup_{hybrid,advanced,...}
 # -- If not, copy and rename this script into the $CASEROOT directory.
-#    > cp  $DART_E3SM_scripts/DART_config.template  $CASEROOT/DART_config
+#    > cp  $DART_E3SM-FV_scripts/DART_config.template  $CASEROOT/DART_config
 # -- Ensure the following variables are set correctly;
 #       DARTROOT               references a valid DART directory.
-#       DART_SCRIPTS_DIR       $DARTROOT/models/E3SM/shell_scripts/your_setup_script_dir
+#       DART_SCRIPTS_DIR       $DARTROOT/models/E3SM-FV/shell_scripts/your_setup_script_dir
 #       BASEOBSDIR             your_observation_path
 #       SAVE_EVERY_MTH_RESTART days_between_archiving_restarts
 # -- Examine the whole script to identify things to change for your experiments.
@@ -59,8 +59,8 @@ echo "==================="
 
 # baseobsdir    Part of the directory name containing the obs_seq.out files to be used by the 
 #               assimilation.  Assimilate.csh looks for a directory with the year and month:
-#               $baseobsdir/YYYYMM_6H_E3SM.
-#               Will be inherited by E3SM#_#_DART_config and inserted into assimilate.csh
+#               $baseobsdir/YYYYMM_6H_E3SM-FV.
+#               Will be inherited by E3SM-FV#_#_DART_config and inserted into assimilate.csh
 # save_every_Mth_day_restarts       
 #               assimilate.csh uses this to remove extraneous restart sets in the DART context.  
 #               This permits more cycles per job and reduces the data volume that's st_archived.
@@ -70,7 +70,7 @@ echo "==================="
 # and the assimilate.csh which will run the assimilation.
 
 setenv DARTROOT               your_dart_path
-setenv DART_SCRIPTS_DIR       $DARTROOT/models/E3SM/shell_scripts/your_setup_script_dir
+setenv DART_SCRIPTS_DIR       your_setup_script_dir
 echo "DART_SCRIPTS_DIR = $DART_SCRIPTS_DIR"
 
 setenv BASEOBSDIR             your_observation_path
@@ -88,12 +88,13 @@ setenv COMPSET       `./xmlquery --value COMPSET`
 setenv EXEROOT       `./xmlquery --value EXEROOT`
 setenv RUNDIR        `./xmlquery --value RUNDIR`
 setenv num_instances `./xmlquery --subgroup ATM --value NINST`
+setenv dart_ntasks   `./xmlquery --value ATM_NTASKS` 
 
 # ==============================================================================
-# Turn on the assimilation in E3SM
+# Turn on the assimilation in E3SM-FV
 
 # The assimilation script to be run is determined by 
-# E3SM's env_run.xml DATA_ASSIMILATION* variables.
+# E3SM-FV's env_run.xml DATA_ASSIMILATION* variables.
 # If DATA_ASSIMILATION = false (default), then neither {no_}assimilate.csh will be run,
 # and CAM restart files (instead of initial) will be used after the first cycle.
 # So always set DATA_ASSIMILATION = TRUE.
@@ -106,7 +107,7 @@ setenv num_instances `./xmlquery --subgroup ATM --value NINST`
 ./xmlchange DATA_ASSIMILATION_ATM=TRUE
 ./xmlchange DATA_ASSIMILATION_CYCLES=1
 
-# The default is to tell E3SM to use no_assimilate.csh.
+# The default is to tell E3SM-FV to use no_assimilate.csh.
 # If this script is run by setup_advanced, use one of its environment variables 
 # to turn on assimilation.  
 # In any case, you can change the value of DATA_ASSIMILATION_SCRIPT in env_run.xml.
@@ -156,7 +157,7 @@ end
 # because it defines what observation types are supported.
 # ==============================================================================
 
-foreach MODEL ( E3SM )
+foreach MODEL ( E3SM-FV )
    set targetdir = $DARTROOT/models/$MODEL/work
    if ( ! -x $targetdir/filter ) then
       echo ""
@@ -182,7 +183,8 @@ end
 sed -e "s#BOGUSNUMINST#$num_instances#" \
     ${DART_SCRIPTS_DIR}/no_assimilate.csh.template > no_assimilate.csh || exit 30
 
-sed -e "s#BOGUSBASEOBSDIR#$BASEOBSDIR#"  \
+sed -e "s#BOGUSNTASKS#$dart_ntasks#" \
+    -e "s#BOGUSBASEOBSDIR#$BASEOBSDIR#"  \
     -e "s#BOGUS_save_every_Mth#$SAVE_EVERY_MTH_RESTART#" \
     ${DART_SCRIPTS_DIR}/assimilate.csh.template  > assimilate.csh  || exit 40
 
@@ -198,7 +200,7 @@ else
 endif
 
 # ==============================================================================
-# Stage the DART executables in the E3SM execution root directory: EXEROOT
+# Stage the DART executables in the E3SM-FV execution root directory: EXEROOT
 # If you recompile the DART code (maybe to support more observation types)
 # we're making a script to make it easy to install new DART executables.
 # ==============================================================================
@@ -223,8 +225,8 @@ if [[ -e input.nml ]]; then
       ${COPY} ${VERBOSE} input.nml input.nml.original
    fi
 
-elif [[ -e ${DARTROOT}/models/E3SM/work/input.nml ]]; then
-   ${COPY} ${VERBOSE} ${DARTROOT}/models/E3SM/work/input.nml  input.nml
+elif [[ -e ${DARTROOT}/models/E3SM-FV/work/input.nml ]]; then
+   ${COPY} ${VERBOSE} ${DARTROOT}/models/E3SM-FV/work/input.nml  input.nml
    if [[ -x update_dart_namelists ]]; then
           ./update_dart_namelists
    fi
@@ -233,9 +235,9 @@ else
    exit 50
 fi
 
-${COPY} -f ${DARTROOT}/models/E3SM/work/filter                 ${EXEROOT} || exit 55
-${COPY} -f ${DARTROOT}/models/E3SM/work/perfect_model_obs      ${EXEROOT} || exit 56
-${COPY} -f ${DARTROOT}/models/E3SM/work/fill_inflation_restart ${EXEROOT} || exit 57
+${COPY} -f ${DARTROOT}/models/E3SM-FV/work/filter                 ${EXEROOT} || exit 55
+${COPY} -f ${DARTROOT}/models/E3SM-FV/work/perfect_model_obs      ${EXEROOT} || exit 56
+${COPY} -f ${DARTROOT}/models/E3SM-FV/work/fill_inflation_restart ${EXEROOT} || exit 57
 
 exit 0
 
@@ -379,7 +381,7 @@ Check the DART configuration:
 6) Make sure the observation directory name in assimilate.csh or perfect_model.csh 
    matches the one on your system.
 
-7) Submit the E3SM job in the normal way.
+7) Submit the E3SM-FV job in the normal way.
 
 8) You can use ${CASEROOT}/stage_e3sm_files to stage an ensemble of files 
    to restart a run at a date for which you have a restart set.

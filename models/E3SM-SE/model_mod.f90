@@ -111,6 +111,9 @@ integer, parameter :: MAX_PERT = 100
 ! model_nml namelist variables and default values
 character(len=256) :: cam_template_filename           = 'caminput.nc'
 character(len=256) :: cam_phis_filename               = 'cam_phis.nc'
+character(len=256) :: homme_map_filename              = 'SEMapping.nc'
+character(len=256) :: cs_grid_filename                = 'SEMapping_cs_grid.nc'
+
 character(len=32)  :: vertical_localization_coord     = 'PRESSURE'
 logical            :: use_log_vertical_scale          = .false.
 integer            :: assimilation_period_days        = 0

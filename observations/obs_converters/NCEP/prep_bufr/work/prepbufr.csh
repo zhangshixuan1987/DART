@@ -83,7 +83,7 @@ endif
 # and/or year have rolled over.
 
 #set BUFR_dir = ../data
-set BUFR_dir  = ${My_BUFR_DATA} #/compyfs/zhan391/acme_init/Observations/PREBUFR
+set BUFR_dir  = ${My_BUFR_DATA}  #/compyfs/zhan391/acme_init/Observations/PREBUFR
 
 set BUFR_idir = ${BUFR_dir}/prepqm
 set BUFR_odir = ${BUFR_dir}/prepout
