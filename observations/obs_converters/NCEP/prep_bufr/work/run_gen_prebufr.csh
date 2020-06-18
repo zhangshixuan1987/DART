@@ -30,10 +30,10 @@ set iyS = 1
 set iyE = 1 
 
 set idS = 1
-set idE = 31
+set idE = 28
 
-set imS = 1
-set imE = 1
+set imS = 2
+set imE = 2
 
 set dp1 = 1
 set mp1 = 1
@@ -65,9 +65,9 @@ while ( $iy <= $iyE )
   set ystr = `printf %04d $year`
   set mstr = `printf %02d $month`
 
-  set BUFR_odir  = ${My_BUFR_DATA}/${ystr}${mstr}_6H_E3SM
-  set BUFR_odir1 = ${My_BUFR_DATA}/${ystr}${mstr}_6H_E3SM-FV
-  set BUFR_odir2 = ${My_BUFR_DATA}/${ystr}${mstr}_6H_E3SM-SE
+  set BUFR_odir  = ${My_BUFR_DATA}/${ystr}${mstr}_12H_E3SM
+  set BUFR_odir1 = ${My_BUFR_DATA}/${ystr}${mstr}_12H_E3SM-FV
+  set BUFR_odir2 = ${My_BUFR_DATA}/${ystr}${mstr}_12H_E3SM-SE
 
   if ( ! -d $BUFR_odir ) then
    mkdir -rp $BUFR_odir
@@ -81,7 +81,7 @@ while ( $iy <= $iyE )
 
    echo $year $month $iday
    #####prebufr to txt file
-   #${prebufr_exec_dir}/prepbufr.csh $year $month $iday 
+   ${prebufr_exec_dir}/prepbufr.csh $year $month $iday 
 
    @ iday++
   end

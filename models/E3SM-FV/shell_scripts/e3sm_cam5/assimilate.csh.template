@@ -60,9 +60,17 @@ switch ("`hostname`")
       set   LINK = '/usr/bin/ln -fvs'
       set   LIST = '/usr/bin/ls '
       set REMOVE = '/usr/bin/rm -fr'
-
-      #This next line ultimately specifies the location of the observation files.
       set  LAUNCHCMD = "srun --mpi=pmi2 --ntasks=BOGUSNTASKS --kill-on-bad-exit -l --cpu_bind=cores -c 4 -m plane=40"
+   breaksw
+
+   case constance*:
+      # PNNL "constance"
+      set   MOVE = '/usr/bin/mv -fv'
+      set   COPY = '/usr/bin/cp -fv --preserve=timestamps'
+      set   LINK = '/usr/bin/ln -fvs'
+      set   LIST = '/usr/bin/ls '
+      set REMOVE = '/usr/bin/rm -fr'
+      set  LAUNCHCMD = "srun --mpi=none --ntasks=BOGUSNTASKS  --cpu_bind=sockets --cpu_bind=verbose --kill-on-bad-exit"
    breaksw
 
    default:
@@ -401,13 +409,13 @@ if ($#log_list >= 3) then
       # The list of components determines which restarts are compressed by this call.
       # List the large files first (more efficient and reliable).
       # There is another call farther down to compress the DART files every cycle.
-      echo "compress.csh started at `date`"
-      ${CASEROOT}/compress.csh $CASE ${rm_date} $ensemble_size "clm2 cpl cam cice" "$stages_all"
-      if ($status != 0) then
-         echo "compress.csh failed at `date`"
-         exit 55
-      endif
-      echo "compress.csh finished at `date`"
+      #echo "compress.csh started at `date`"
+      #${CASEROOT}/compress.csh $CASE ${rm_date} $ensemble_size "clm2 cpl cam cice" "$stages_all"
+      #if ($status != 0) then
+      #   echo "compress.csh failed at `date`"
+      #   exit 55
+      #endif
+      #echo "compress.csh finished at `date`"
 
       # Save the restart set to archive/rest/$datename,
       # where it will be safe from removes of $component/rest.
@@ -1007,17 +1015,17 @@ endif
 # Compress the large coupler history files and DART files.
 # ==============================================================================
 
-echo "STARTING: compressing coupler history files and DART files at `date`"
+#echo "STARTING: compressing coupler history files and DART files at `date`"
 
-${CASEROOT}/compress.csh $CASE $ATM_DATE_EXT $ensemble_size "hist dart" "$stages_all"
-if ($status != 0) then
-   echo "ERROR: Compression of coupler history files and DART files failed at `date`"
-   # Ensure the removal of unneeded restart sets and copy of obs_seq.final are finished.
-   wait
-   exit 250
-endif
-
-echo "FINISHED: compressing coupler history files and DART files at `date`"
+#${CASEROOT}/compress.csh $CASE $ATM_DATE_EXT $ensemble_size "hist dart" "$stages_all"
+#if ($status != 0) then
+#   echo "ERROR: Compression of coupler history files and DART files failed at `date`"
+#   # Ensure the removal of unneeded restart sets and copy of obs_seq.final are finished.
+#   wait
+#   exit 250
+#endif
+#
+#echo "FINISHED: compressing coupler history files and DART files at `date`"
 echo "`date` -- END CAM_ASSIMILATE"
 
 # Ensure the removal of unneeded restart sets and copy of obs_seq.final are finished.

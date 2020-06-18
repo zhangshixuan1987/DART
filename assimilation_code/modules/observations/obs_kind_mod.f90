@@ -492,99 +492,55 @@ integer, parameter :: max_defined_quantities = 366
                                                                               
 ! Integer definitions for DART TYPES
 integer, parameter, public :: &
-                                       TEMPERATURE =     1, &
-                                 SPECIFIC_HUMIDITY =     2, &
-                                          PRESSURE =     3, &
-                                GPSRO_REFRACTIVITY =     4, &
-                       RADIOSONDE_U_WIND_COMPONENT =     5, &
-                       RADIOSONDE_V_WIND_COMPONENT =     6, &
-                       RADIOSONDE_GEOPOTENTIAL_HGT =     7, &
-                       RADIOSONDE_SURFACE_PRESSURE =     8, &
-                            RADIOSONDE_TEMPERATURE =     9, &
-                      RADIOSONDE_SPECIFIC_HUMIDITY =    10, &
-                        DROPSONDE_U_WIND_COMPONENT =    11, &
-                        DROPSONDE_V_WIND_COMPONENT =    12, &
-                        DROPSONDE_SURFACE_PRESSURE =    13, &
-                             DROPSONDE_TEMPERATURE =    14, &
-                       DROPSONDE_SPECIFIC_HUMIDITY =    15, &
-                         AIRCRAFT_U_WIND_COMPONENT =    16, &
-                         AIRCRAFT_V_WIND_COMPONENT =    17, &
-                              AIRCRAFT_TEMPERATURE =    18, &
-                        AIRCRAFT_SPECIFIC_HUMIDITY =    19, &
-                            ACARS_U_WIND_COMPONENT =    20, &
-                            ACARS_V_WIND_COMPONENT =    21, &
-                                 ACARS_TEMPERATURE =    22, &
-                           ACARS_SPECIFIC_HUMIDITY =    23, &
-                       MARINE_SFC_U_WIND_COMPONENT =    24, &
-                       MARINE_SFC_V_WIND_COMPONENT =    25, &
-                            MARINE_SFC_TEMPERATURE =    26, &
-                      MARINE_SFC_SPECIFIC_HUMIDITY =    27, &
-                               MARINE_SFC_PRESSURE =    28, &
-                         LAND_SFC_U_WIND_COMPONENT =    29, &
-                         LAND_SFC_V_WIND_COMPONENT =    30, &
-                              LAND_SFC_TEMPERATURE =    31, &
-                        LAND_SFC_SPECIFIC_HUMIDITY =    32, &
-                                 LAND_SFC_PRESSURE =    33, &
-                              SAT_U_WIND_COMPONENT =    34, &
-                              SAT_V_WIND_COMPONENT =    35, &
-                                  ATOV_TEMPERATURE =    36, &
-                                  AIRS_TEMPERATURE =    37, &
-                            AIRS_SPECIFIC_HUMIDITY =    38, &
-                            GPS_PRECIPITABLE_WATER =    39, &
-                      RADIOSONDE_SURFACE_ALTIMETER =    40, &
-                       DROPSONDE_SURFACE_ALTIMETER =    41, &
-                              MARINE_SFC_ALTIMETER =    42, &
-                                LAND_SFC_ALTIMETER =    43, &
-                                   METAR_ALTIMETER =    44, &
-                                   SAT_TEMPERATURE =    45, &
-                          SAT_TEMPERATURE_ELECTRON =    46, &
-                               SAT_TEMPERATURE_ION =    47, &
-                           SAT_DENSITY_NEUTRAL_O3P =    48, &
-                            SAT_DENSITY_NEUTRAL_O2 =    49, &
-                            SAT_DENSITY_NEUTRAL_N2 =    50, &
-                           SAT_DENSITY_NEUTRAL_N4S =    51, &
-                            SAT_DENSITY_NEUTRAL_NO =    52, &
-                           SAT_DENSITY_NEUTRAL_N2D =    53, &
-                           SAT_DENSITY_NEUTRAL_N2P =    54, &
-                             SAT_DENSITY_NEUTRAL_H =    55, &
-                            SAT_DENSITY_NEUTRAL_HE =    56, &
-                           SAT_DENSITY_NEUTRAL_CO2 =    57, &
-                           SAT_DENSITY_NEUTRAL_O1D =    58, &
-                              SAT_DENSITY_ION_O4SP =    59, &
-                               SAT_DENSITY_ION_O2P =    60, &
-                               SAT_DENSITY_ION_N2P =    61, &
-                                SAT_DENSITY_ION_NP =    62, &
-                               SAT_DENSITY_ION_NOP =    63, &
-                              SAT_DENSITY_ION_O2DP =    64, &
-                              SAT_DENSITY_ION_O2PP =    65, &
-                                SAT_DENSITY_ION_HP =    66, &
-                               SAT_DENSITY_ION_HEP =    67, &
-                                 SAT_DENSITY_ION_E =    68, &
-                                    SAT_VELOCITY_U =    69, &
-                                    SAT_VELOCITY_V =    70, &
-                                    SAT_VELOCITY_W =    71, &
-                                SAT_VELOCITY_U_ION =    72, &
-                                SAT_VELOCITY_V_ION =    73, &
-                                SAT_VELOCITY_W_ION =    74, &
-                         SAT_VELOCITY_VERTICAL_O3P =    75, &
-                          SAT_VELOCITY_VERTICAL_O2 =    76, &
-                          SAT_VELOCITY_VERTICAL_N2 =    77, &
-                         SAT_VELOCITY_VERTICAL_N4S =    78, &
-                          SAT_VELOCITY_VERTICAL_NO =    79, &
-                                          SAT_F107 =    80, &
-                                           SAT_RHO =    81, &
-                                       GPS_PROFILE =    82, &
-                           COSMIC_ELECTRON_DENSITY =    83, &
-                                      GND_GPS_VTEC =    84, &
-                                     CHAMP_DENSITY =    85, &
-                                         MIDAS_TEC =    86, &
-                                  SSUSI_O_N2_RATIO =    87, &
-                                   GPS_VTEC_EXTRAP =    88, &
-                                 SABER_TEMPERATURE =    89, &
-                               AURAMLS_TEMPERATURE =    90
+                                   SAT_TEMPERATURE =     1, &
+                          SAT_TEMPERATURE_ELECTRON =     2, &
+                               SAT_TEMPERATURE_ION =     3, &
+                           SAT_DENSITY_NEUTRAL_O3P =     4, &
+                            SAT_DENSITY_NEUTRAL_O2 =     5, &
+                            SAT_DENSITY_NEUTRAL_N2 =     6, &
+                           SAT_DENSITY_NEUTRAL_N4S =     7, &
+                            SAT_DENSITY_NEUTRAL_NO =     8, &
+                           SAT_DENSITY_NEUTRAL_N2D =     9, &
+                           SAT_DENSITY_NEUTRAL_N2P =    10, &
+                             SAT_DENSITY_NEUTRAL_H =    11, &
+                            SAT_DENSITY_NEUTRAL_HE =    12, &
+                           SAT_DENSITY_NEUTRAL_CO2 =    13, &
+                           SAT_DENSITY_NEUTRAL_O1D =    14, &
+                              SAT_DENSITY_ION_O4SP =    15, &
+                               SAT_DENSITY_ION_O2P =    16, &
+                               SAT_DENSITY_ION_N2P =    17, &
+                                SAT_DENSITY_ION_NP =    18, &
+                               SAT_DENSITY_ION_NOP =    19, &
+                              SAT_DENSITY_ION_O2DP =    20, &
+                              SAT_DENSITY_ION_O2PP =    21, &
+                                SAT_DENSITY_ION_HP =    22, &
+                               SAT_DENSITY_ION_HEP =    23, &
+                                 SAT_DENSITY_ION_E =    24, &
+                                    SAT_VELOCITY_U =    25, &
+                                    SAT_VELOCITY_V =    26, &
+                                    SAT_VELOCITY_W =    27, &
+                                SAT_VELOCITY_U_ION =    28, &
+                                SAT_VELOCITY_V_ION =    29, &
+                                SAT_VELOCITY_W_ION =    30, &
+                         SAT_VELOCITY_VERTICAL_O3P =    31, &
+                          SAT_VELOCITY_VERTICAL_O2 =    32, &
+                          SAT_VELOCITY_VERTICAL_N2 =    33, &
+                         SAT_VELOCITY_VERTICAL_N4S =    34, &
+                          SAT_VELOCITY_VERTICAL_NO =    35, &
+                                          SAT_F107 =    36, &
+                                           SAT_RHO =    37, &
+                                       GPS_PROFILE =    38, &
+                           COSMIC_ELECTRON_DENSITY =    39, &
+                                      GND_GPS_VTEC =    40, &
+                                     CHAMP_DENSITY =    41, &
+                                         MIDAS_TEC =    42, &
+                                  SSUSI_O_N2_RATIO =    43, &
+                                   GPS_VTEC_EXTRAP =    44, &
+                                 SABER_TEMPERATURE =    45, &
+                               AURAMLS_TEMPERATURE =    46
                                                                               
                                                                               
-integer, parameter, public :: max_defined_types_of_obs =    90
+integer, parameter, public :: max_defined_types_of_obs =    46
                                                                               
 !---------------------------------------------------------------------------  
 
@@ -692,185 +648,97 @@ call check_namelist_read(iunit, io, "obs_kind_nml")
 ! Table which associates the string type name with the index type value
 ! and the kind.  Default for all obs is to not assimilate or evaluate.
 
-obs_type_info(    1) = obs_type_type(TEMPERATURE, &
-    'TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
-obs_type_info(    2) = obs_type_type(SPECIFIC_HUMIDITY, &
-    'SPECIFIC_HUMIDITY', QTY_SPECIFIC_HUMIDITY, .false., .false., .false.)
-obs_type_info(    3) = obs_type_type(PRESSURE, &
-    'PRESSURE', QTY_PRESSURE, .false., .false., .false.)
-obs_type_info(    4) = obs_type_type(GPSRO_REFRACTIVITY, &
-    'GPSRO_REFRACTIVITY', QTY_GPSRO, .false., .false., .false.)
-obs_type_info(    5) = obs_type_type(RADIOSONDE_U_WIND_COMPONENT, &
-    'RADIOSONDE_U_WIND_COMPONENT', QTY_U_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(    6) = obs_type_type(RADIOSONDE_V_WIND_COMPONENT, &
-    'RADIOSONDE_V_WIND_COMPONENT', QTY_V_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(    7) = obs_type_type(RADIOSONDE_GEOPOTENTIAL_HGT, &
-    'RADIOSONDE_GEOPOTENTIAL_HGT', QTY_GEOPOTENTIAL_HEIGHT, .false., .false., .false.)
-obs_type_info(    8) = obs_type_type(RADIOSONDE_SURFACE_PRESSURE, &
-    'RADIOSONDE_SURFACE_PRESSURE', QTY_SURFACE_PRESSURE, .false., .false., .false.)
-obs_type_info(    9) = obs_type_type(RADIOSONDE_TEMPERATURE, &
-    'RADIOSONDE_TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
-obs_type_info(   10) = obs_type_type(RADIOSONDE_SPECIFIC_HUMIDITY, &
-    'RADIOSONDE_SPECIFIC_HUMIDITY', QTY_SPECIFIC_HUMIDITY, .false., .false., .false.)
-obs_type_info(   11) = obs_type_type(DROPSONDE_U_WIND_COMPONENT, &
-    'DROPSONDE_U_WIND_COMPONENT', QTY_U_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   12) = obs_type_type(DROPSONDE_V_WIND_COMPONENT, &
-    'DROPSONDE_V_WIND_COMPONENT', QTY_V_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   13) = obs_type_type(DROPSONDE_SURFACE_PRESSURE, &
-    'DROPSONDE_SURFACE_PRESSURE', QTY_SURFACE_PRESSURE, .false., .false., .false.)
-obs_type_info(   14) = obs_type_type(DROPSONDE_TEMPERATURE, &
-    'DROPSONDE_TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
-obs_type_info(   15) = obs_type_type(DROPSONDE_SPECIFIC_HUMIDITY, &
-    'DROPSONDE_SPECIFIC_HUMIDITY', QTY_SPECIFIC_HUMIDITY, .false., .false., .false.)
-obs_type_info(   16) = obs_type_type(AIRCRAFT_U_WIND_COMPONENT, &
-    'AIRCRAFT_U_WIND_COMPONENT', QTY_U_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   17) = obs_type_type(AIRCRAFT_V_WIND_COMPONENT, &
-    'AIRCRAFT_V_WIND_COMPONENT', QTY_V_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   18) = obs_type_type(AIRCRAFT_TEMPERATURE, &
-    'AIRCRAFT_TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
-obs_type_info(   19) = obs_type_type(AIRCRAFT_SPECIFIC_HUMIDITY, &
-    'AIRCRAFT_SPECIFIC_HUMIDITY', QTY_SPECIFIC_HUMIDITY, .false., .false., .false.)
-obs_type_info(   20) = obs_type_type(ACARS_U_WIND_COMPONENT, &
-    'ACARS_U_WIND_COMPONENT', QTY_U_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   21) = obs_type_type(ACARS_V_WIND_COMPONENT, &
-    'ACARS_V_WIND_COMPONENT', QTY_V_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   22) = obs_type_type(ACARS_TEMPERATURE, &
-    'ACARS_TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
-obs_type_info(   23) = obs_type_type(ACARS_SPECIFIC_HUMIDITY, &
-    'ACARS_SPECIFIC_HUMIDITY', QTY_SPECIFIC_HUMIDITY, .false., .false., .false.)
-obs_type_info(   24) = obs_type_type(MARINE_SFC_U_WIND_COMPONENT, &
-    'MARINE_SFC_U_WIND_COMPONENT', QTY_U_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   25) = obs_type_type(MARINE_SFC_V_WIND_COMPONENT, &
-    'MARINE_SFC_V_WIND_COMPONENT', QTY_V_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   26) = obs_type_type(MARINE_SFC_TEMPERATURE, &
-    'MARINE_SFC_TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
-obs_type_info(   27) = obs_type_type(MARINE_SFC_SPECIFIC_HUMIDITY, &
-    'MARINE_SFC_SPECIFIC_HUMIDITY', QTY_SPECIFIC_HUMIDITY, .false., .false., .false.)
-obs_type_info(   28) = obs_type_type(MARINE_SFC_PRESSURE, &
-    'MARINE_SFC_PRESSURE', QTY_SURFACE_PRESSURE, .false., .false., .false.)
-obs_type_info(   29) = obs_type_type(LAND_SFC_U_WIND_COMPONENT, &
-    'LAND_SFC_U_WIND_COMPONENT', QTY_U_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   30) = obs_type_type(LAND_SFC_V_WIND_COMPONENT, &
-    'LAND_SFC_V_WIND_COMPONENT', QTY_V_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   31) = obs_type_type(LAND_SFC_TEMPERATURE, &
-    'LAND_SFC_TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
-obs_type_info(   32) = obs_type_type(LAND_SFC_SPECIFIC_HUMIDITY, &
-    'LAND_SFC_SPECIFIC_HUMIDITY', QTY_SPECIFIC_HUMIDITY, .false., .false., .false.)
-obs_type_info(   33) = obs_type_type(LAND_SFC_PRESSURE, &
-    'LAND_SFC_PRESSURE', QTY_SURFACE_PRESSURE, .false., .false., .false.)
-obs_type_info(   34) = obs_type_type(SAT_U_WIND_COMPONENT, &
-    'SAT_U_WIND_COMPONENT', QTY_U_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   35) = obs_type_type(SAT_V_WIND_COMPONENT, &
-    'SAT_V_WIND_COMPONENT', QTY_V_WIND_COMPONENT, .false., .false., .false.)
-obs_type_info(   36) = obs_type_type(ATOV_TEMPERATURE, &
-    'ATOV_TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
-obs_type_info(   37) = obs_type_type(AIRS_TEMPERATURE, &
-    'AIRS_TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
-obs_type_info(   38) = obs_type_type(AIRS_SPECIFIC_HUMIDITY, &
-    'AIRS_SPECIFIC_HUMIDITY', QTY_SPECIFIC_HUMIDITY, .false., .false., .false.)
-obs_type_info(   39) = obs_type_type(GPS_PRECIPITABLE_WATER, &
-    'GPS_PRECIPITABLE_WATER', QTY_PRECIPITABLE_WATER, .false., .false., .false.)
-obs_type_info(   40) = obs_type_type(RADIOSONDE_SURFACE_ALTIMETER, &
-    'RADIOSONDE_SURFACE_ALTIMETER', QTY_SURFACE_PRESSURE, .false., .false., .false.)
-obs_type_info(   41) = obs_type_type(DROPSONDE_SURFACE_ALTIMETER, &
-    'DROPSONDE_SURFACE_ALTIMETER', QTY_SURFACE_PRESSURE, .false., .false., .false.)
-obs_type_info(   42) = obs_type_type(MARINE_SFC_ALTIMETER, &
-    'MARINE_SFC_ALTIMETER', QTY_SURFACE_PRESSURE, .false., .false., .false.)
-obs_type_info(   43) = obs_type_type(LAND_SFC_ALTIMETER, &
-    'LAND_SFC_ALTIMETER', QTY_SURFACE_PRESSURE, .false., .false., .false.)
-obs_type_info(   44) = obs_type_type(METAR_ALTIMETER, &
-    'METAR_ALTIMETER', QTY_SURFACE_PRESSURE, .false., .false., .false.)
-obs_type_info(   45) = obs_type_type(SAT_TEMPERATURE, &
+obs_type_info(    1) = obs_type_type(SAT_TEMPERATURE, &
     'SAT_TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
-obs_type_info(   46) = obs_type_type(SAT_TEMPERATURE_ELECTRON, &
+obs_type_info(    2) = obs_type_type(SAT_TEMPERATURE_ELECTRON, &
     'SAT_TEMPERATURE_ELECTRON', QTY_TEMPERATURE_ELECTRON, .false., .false., .false.)
-obs_type_info(   47) = obs_type_type(SAT_TEMPERATURE_ION, &
+obs_type_info(    3) = obs_type_type(SAT_TEMPERATURE_ION, &
     'SAT_TEMPERATURE_ION', QTY_TEMPERATURE_ION, .false., .false., .false.)
-obs_type_info(   48) = obs_type_type(SAT_DENSITY_NEUTRAL_O3P, &
+obs_type_info(    4) = obs_type_type(SAT_DENSITY_NEUTRAL_O3P, &
     'SAT_DENSITY_NEUTRAL_O3P', QTY_DENSITY_NEUTRAL_O3P, .false., .false., .false.)
-obs_type_info(   49) = obs_type_type(SAT_DENSITY_NEUTRAL_O2, &
+obs_type_info(    5) = obs_type_type(SAT_DENSITY_NEUTRAL_O2, &
     'SAT_DENSITY_NEUTRAL_O2', QTY_DENSITY_NEUTRAL_O2, .false., .false., .false.)
-obs_type_info(   50) = obs_type_type(SAT_DENSITY_NEUTRAL_N2, &
+obs_type_info(    6) = obs_type_type(SAT_DENSITY_NEUTRAL_N2, &
     'SAT_DENSITY_NEUTRAL_N2', QTY_DENSITY_NEUTRAL_N2, .false., .false., .false.)
-obs_type_info(   51) = obs_type_type(SAT_DENSITY_NEUTRAL_N4S, &
+obs_type_info(    7) = obs_type_type(SAT_DENSITY_NEUTRAL_N4S, &
     'SAT_DENSITY_NEUTRAL_N4S', QTY_DENSITY_NEUTRAL_N4S, .false., .false., .false.)
-obs_type_info(   52) = obs_type_type(SAT_DENSITY_NEUTRAL_NO, &
+obs_type_info(    8) = obs_type_type(SAT_DENSITY_NEUTRAL_NO, &
     'SAT_DENSITY_NEUTRAL_NO', QTY_DENSITY_NEUTRAL_NO, .false., .false., .false.)
-obs_type_info(   53) = obs_type_type(SAT_DENSITY_NEUTRAL_N2D, &
+obs_type_info(    9) = obs_type_type(SAT_DENSITY_NEUTRAL_N2D, &
     'SAT_DENSITY_NEUTRAL_N2D', QTY_DENSITY_NEUTRAL_N2D, .false., .false., .false.)
-obs_type_info(   54) = obs_type_type(SAT_DENSITY_NEUTRAL_N2P, &
+obs_type_info(   10) = obs_type_type(SAT_DENSITY_NEUTRAL_N2P, &
     'SAT_DENSITY_NEUTRAL_N2P', QTY_DENSITY_NEUTRAL_N2P, .false., .false., .false.)
-obs_type_info(   55) = obs_type_type(SAT_DENSITY_NEUTRAL_H, &
+obs_type_info(   11) = obs_type_type(SAT_DENSITY_NEUTRAL_H, &
     'SAT_DENSITY_NEUTRAL_H', QTY_DENSITY_NEUTRAL_H, .false., .false., .false.)
-obs_type_info(   56) = obs_type_type(SAT_DENSITY_NEUTRAL_HE, &
+obs_type_info(   12) = obs_type_type(SAT_DENSITY_NEUTRAL_HE, &
     'SAT_DENSITY_NEUTRAL_HE', QTY_DENSITY_NEUTRAL_HE, .false., .false., .false.)
-obs_type_info(   57) = obs_type_type(SAT_DENSITY_NEUTRAL_CO2, &
+obs_type_info(   13) = obs_type_type(SAT_DENSITY_NEUTRAL_CO2, &
     'SAT_DENSITY_NEUTRAL_CO2', QTY_DENSITY_NEUTRAL_CO2, .false., .false., .false.)
-obs_type_info(   58) = obs_type_type(SAT_DENSITY_NEUTRAL_O1D, &
+obs_type_info(   14) = obs_type_type(SAT_DENSITY_NEUTRAL_O1D, &
     'SAT_DENSITY_NEUTRAL_O1D', QTY_DENSITY_NEUTRAL_O1D, .false., .false., .false.)
-obs_type_info(   59) = obs_type_type(SAT_DENSITY_ION_O4SP, &
+obs_type_info(   15) = obs_type_type(SAT_DENSITY_ION_O4SP, &
     'SAT_DENSITY_ION_O4SP', QTY_DENSITY_ION_O4SP, .false., .false., .false.)
-obs_type_info(   60) = obs_type_type(SAT_DENSITY_ION_O2P, &
+obs_type_info(   16) = obs_type_type(SAT_DENSITY_ION_O2P, &
     'SAT_DENSITY_ION_O2P', QTY_DENSITY_ION_O2P, .false., .false., .false.)
-obs_type_info(   61) = obs_type_type(SAT_DENSITY_ION_N2P, &
+obs_type_info(   17) = obs_type_type(SAT_DENSITY_ION_N2P, &
     'SAT_DENSITY_ION_N2P', QTY_DENSITY_ION_N2P, .false., .false., .false.)
-obs_type_info(   62) = obs_type_type(SAT_DENSITY_ION_NP, &
+obs_type_info(   18) = obs_type_type(SAT_DENSITY_ION_NP, &
     'SAT_DENSITY_ION_NP', QTY_DENSITY_ION_NP, .false., .false., .false.)
-obs_type_info(   63) = obs_type_type(SAT_DENSITY_ION_NOP, &
+obs_type_info(   19) = obs_type_type(SAT_DENSITY_ION_NOP, &
     'SAT_DENSITY_ION_NOP', QTY_DENSITY_ION_NOP, .false., .false., .false.)
-obs_type_info(   64) = obs_type_type(SAT_DENSITY_ION_O2DP, &
+obs_type_info(   20) = obs_type_type(SAT_DENSITY_ION_O2DP, &
     'SAT_DENSITY_ION_O2DP', QTY_DENSITY_ION_O2DP, .false., .false., .false.)
-obs_type_info(   65) = obs_type_type(SAT_DENSITY_ION_O2PP, &
+obs_type_info(   21) = obs_type_type(SAT_DENSITY_ION_O2PP, &
     'SAT_DENSITY_ION_O2PP', QTY_DENSITY_ION_O2PP, .false., .false., .false.)
-obs_type_info(   66) = obs_type_type(SAT_DENSITY_ION_HP, &
+obs_type_info(   22) = obs_type_type(SAT_DENSITY_ION_HP, &
     'SAT_DENSITY_ION_HP', QTY_DENSITY_ION_HP, .false., .false., .false.)
-obs_type_info(   67) = obs_type_type(SAT_DENSITY_ION_HEP, &
+obs_type_info(   23) = obs_type_type(SAT_DENSITY_ION_HEP, &
     'SAT_DENSITY_ION_HEP', QTY_DENSITY_ION_HEP, .false., .false., .false.)
-obs_type_info(   68) = obs_type_type(SAT_DENSITY_ION_E, &
+obs_type_info(   24) = obs_type_type(SAT_DENSITY_ION_E, &
     'SAT_DENSITY_ION_E', QTY_DENSITY_ION_E, .false., .false., .false.)
-obs_type_info(   69) = obs_type_type(SAT_VELOCITY_U, &
+obs_type_info(   25) = obs_type_type(SAT_VELOCITY_U, &
     'SAT_VELOCITY_U', QTY_VELOCITY_U, .false., .false., .false.)
-obs_type_info(   70) = obs_type_type(SAT_VELOCITY_V, &
+obs_type_info(   26) = obs_type_type(SAT_VELOCITY_V, &
     'SAT_VELOCITY_V', QTY_VELOCITY_V, .false., .false., .false.)
-obs_type_info(   71) = obs_type_type(SAT_VELOCITY_W, &
+obs_type_info(   27) = obs_type_type(SAT_VELOCITY_W, &
     'SAT_VELOCITY_W', QTY_VELOCITY_W, .false., .false., .false.)
-obs_type_info(   72) = obs_type_type(SAT_VELOCITY_U_ION, &
+obs_type_info(   28) = obs_type_type(SAT_VELOCITY_U_ION, &
     'SAT_VELOCITY_U_ION', QTY_VELOCITY_U_ION, .false., .false., .false.)
-obs_type_info(   73) = obs_type_type(SAT_VELOCITY_V_ION, &
+obs_type_info(   29) = obs_type_type(SAT_VELOCITY_V_ION, &
     'SAT_VELOCITY_V_ION', QTY_VELOCITY_V_ION, .false., .false., .false.)
-obs_type_info(   74) = obs_type_type(SAT_VELOCITY_W_ION, &
+obs_type_info(   30) = obs_type_type(SAT_VELOCITY_W_ION, &
     'SAT_VELOCITY_W_ION', QTY_VELOCITY_W_ION, .false., .false., .false.)
-obs_type_info(   75) = obs_type_type(SAT_VELOCITY_VERTICAL_O3P, &
+obs_type_info(   31) = obs_type_type(SAT_VELOCITY_VERTICAL_O3P, &
     'SAT_VELOCITY_VERTICAL_O3P', QTY_VELOCITY_VERTICAL_O3P, .false., .false., .false.)
-obs_type_info(   76) = obs_type_type(SAT_VELOCITY_VERTICAL_O2, &
+obs_type_info(   32) = obs_type_type(SAT_VELOCITY_VERTICAL_O2, &
     'SAT_VELOCITY_VERTICAL_O2', QTY_VELOCITY_VERTICAL_O2, .false., .false., .false.)
-obs_type_info(   77) = obs_type_type(SAT_VELOCITY_VERTICAL_N2, &
+obs_type_info(   33) = obs_type_type(SAT_VELOCITY_VERTICAL_N2, &
     'SAT_VELOCITY_VERTICAL_N2', QTY_VELOCITY_VERTICAL_N2, .false., .false., .false.)
-obs_type_info(   78) = obs_type_type(SAT_VELOCITY_VERTICAL_N4S, &
+obs_type_info(   34) = obs_type_type(SAT_VELOCITY_VERTICAL_N4S, &
     'SAT_VELOCITY_VERTICAL_N4S', QTY_VELOCITY_VERTICAL_N4S, .false., .false., .false.)
-obs_type_info(   79) = obs_type_type(SAT_VELOCITY_VERTICAL_NO, &
+obs_type_info(   35) = obs_type_type(SAT_VELOCITY_VERTICAL_NO, &
     'SAT_VELOCITY_VERTICAL_NO', QTY_VELOCITY_VERTICAL_NO, .false., .false., .false.)
-obs_type_info(   80) = obs_type_type(SAT_F107, &
+obs_type_info(   36) = obs_type_type(SAT_F107, &
     'SAT_F107', QTY_1D_PARAMETER, .false., .false., .false.)
-obs_type_info(   81) = obs_type_type(SAT_RHO, &
+obs_type_info(   37) = obs_type_type(SAT_RHO, &
     'SAT_RHO', QTY_DENSITY, .false., .false., .false.)
-obs_type_info(   82) = obs_type_type(GPS_PROFILE, &
+obs_type_info(   38) = obs_type_type(GPS_PROFILE, &
     'GPS_PROFILE', QTY_ELECTRON_DENSITY, .false., .false., .false.)
-obs_type_info(   83) = obs_type_type(COSMIC_ELECTRON_DENSITY, &
+obs_type_info(   39) = obs_type_type(COSMIC_ELECTRON_DENSITY, &
     'COSMIC_ELECTRON_DENSITY', QTY_ELECTRON_DENSITY, .false., .false., .false.)
-obs_type_info(   84) = obs_type_type(GND_GPS_VTEC, &
+obs_type_info(   40) = obs_type_type(GND_GPS_VTEC, &
     'GND_GPS_VTEC', 		           QTY_GND_GPS_VTEC, .false., .false., .false.)
-obs_type_info(   85) = obs_type_type(CHAMP_DENSITY, &
+obs_type_info(   41) = obs_type_type(CHAMP_DENSITY, &
     'CHAMP_DENSITY', QTY_DENSITY, .false., .false., .false.)
-obs_type_info(   86) = obs_type_type(MIDAS_TEC, &
+obs_type_info(   42) = obs_type_type(MIDAS_TEC, &
     'MIDAS_TEC', QTY_VERTICAL_TEC, .false., .false., .false.)
-obs_type_info(   87) = obs_type_type(SSUSI_O_N2_RATIO, &
+obs_type_info(   43) = obs_type_type(SSUSI_O_N2_RATIO, &
     'SSUSI_O_N2_RATIO', QTY_O_N2_COLUMN_DENSITY_RATIO, .false., .false., .false.)
-obs_type_info(   88) = obs_type_type(GPS_VTEC_EXTRAP, &
+obs_type_info(   44) = obs_type_type(GPS_VTEC_EXTRAP, &
     'GPS_VTEC_EXTRAP', QTY_VERTICAL_TEC, .false., .false., .false.)
-obs_type_info(   89) = obs_type_type(SABER_TEMPERATURE, &
+obs_type_info(   45) = obs_type_type(SABER_TEMPERATURE, &
     'SABER_TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
-obs_type_info(   90) = obs_type_type(AURAMLS_TEMPERATURE, &
+obs_type_info(   46) = obs_type_type(AURAMLS_TEMPERATURE, &
     'AURAMLS_TEMPERATURE', QTY_TEMPERATURE, .false., .false., .false.)
 
 !----------------------------------------------------------------------------
