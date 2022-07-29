@@ -179,8 +179,9 @@
 &model_nml
    assimilation_period_days     = 0
    assimilation_period_seconds  = 259200
-   model_perturbation_amplitude = 0.2
-   model_shape_file             = 'OUTPUT.nc'
+   model_perturbation_amplitude = 0.0002
+   model_shape_file             = 'OUTPUT_sq.nc'
+   do_squish                    = .FALSE. 
    mitgcm_variables = 'PSAL', 'QTY_SALINITY',                   'NA',  'NA', 'update',
                       'PTMP', 'QTY_TEMPERATURE',                'NA',  'NA', 'update',
                       'UVEL', 'QTY_U_CURRENT_COMPONENT',        'NA',  'NA', 'update',

@@ -36,7 +36,7 @@ use     obs_kind_mod,      only : QTY_TEMPERATURE, QTY_SALINITY, QTY_U_CURRENT_C
                                   QTY_DISSOLVED_ORGANIC_NITROGEN, QTY_ALKALINITY,          &
                                   get_index_for_quantity
 
-use mpi_utilities_mod,     only : my_task_id
+use mpi_utilities_mod,     only : my_task_id, task_sync
 
 use random_seq_mod,        only : random_seq_type, init_random_seq, random_gaussian
 
@@ -54,10 +54,14 @@ use state_structure_mod,   only : add_domain, get_model_variable_indices, &
                                   get_index_start, get_index_end, &
                                   get_dart_vector_index, get_num_variables, &
                                   get_domain_size, &
-                                  get_io_clamping_minval
+                                  get_io_clamping_minval, add_dimension_to_variable
+
                                   
 use netcdf_utilities_mod,  only : nc_open_file_readonly, nc_get_variable, & 
-                                  nc_get_variable_size
+                                  nc_get_variable_size, nc_get_squished_size, & 
+                                  nc_create_file, nc_define_dimension, &
+                                  nc_define_real_variable, nc_put_variable, nc_close_file
+                                  
 
 use netcdf
 
@@ -258,12 +262,16 @@ integer :: FVAL=-999.0 !SIVA: The FVAL is the fill value used for input netcdf f
 ! standard MITgcm namelist and filled in here.
 
 integer :: Nx=-1, Ny=-1, Nz=-1    ! grid counts for each field
+integer :: n_3d = 13, n_2d = 2    ! number of 3d and 2d variabels   
 
 ! locations of cell centers (C) and edges (G) for each axis.
 real(r8), allocatable :: XC(:), XG(:), YC(:), YG(:), ZC(:), ZG(:)
 real(r4), allocatable :: XC_sq(:), YC_sq(:), XG_sq(:), YG_sq(:), ZC_sq(:)
 integer               :: xcsqsize, ycsqsize, zcsqsize
 integer               :: shape_file_id
+logical               :: do_squish
+integer(i8)           :: sqsize_2d, sqsize_3d
+integer               :: s_shape_file_id
 
 real(r8)        :: ocean_dynamics_timestep = 900.0_r4
 integer         :: timestepcount = 0
@@ -285,6 +293,7 @@ character(len=vtablenamelength) :: mitgcm_variables(NUM_STATE_TABLE_COLUMNS, MAX
 
 
 character(len=256) :: model_shape_file = ' '
+character(len=256) :: squished_model_shape_file = ' ' 
 integer  :: assimilation_period_days = 7
 integer  :: assimilation_period_seconds = 0
 real(r8) :: model_perturbation_amplitude = 0.2
@@ -293,7 +302,9 @@ namelist /model_nml/ assimilation_period_days,     &
                      assimilation_period_seconds,  &
                      model_perturbation_amplitude, &
                      model_shape_file,             &
-                     mitgcm_variables 
+                     mitgcm_variables,             & 
+                     squished_model_shape_file,    & 
+                     do_squish
 
 logical :: go_to_dart    = .false.
 logical :: do_bgc        = .false.
@@ -313,6 +324,7 @@ type MIT_meta_type
 end type MIT_meta_type
 
 integer :: domain_id
+integer :: sq_domain_id
 integer :: nvars
 
 contains
@@ -531,34 +543,54 @@ if (do_output()) write(     *     , *) '  Nx, Ny, Nz = ', Nx, Ny, Nz
 call parse_variable_input(mitgcm_variables, model_shape_file, nvars, &
                 var_names, quantity_list, clamp_vals, update_list)
 
-domain_id = add_domain(model_shape_file, nvars, &
-                    var_names, quantity_list, clamp_vals, update_list )
-! Open the file
-shape_file_id = nc_open_file_readonly(model_shape_file)
-! Get the size
-call nc_get_variable_size(shape_file_id, 'XC_3D', xcsqsize)
-call nc_get_variable_size(shape_file_id, 'YC_3D', ycsqsize)
-call nc_get_variable_size(shape_file_id, 'ZC_3D', zcsqsize)
+if (do_squish) then
+ ! Only perform the write on the first processor
+ if (my_task_id() == 0) then
+ call nc_write_squished_file(model_shape_file, squished_model_shape_file, nvars, var_names, & 
+                  quantity_list, clamp_vals, update_list)
+ endif
 
-! Allocate the variable and get the values
-allocate(xc_sq(xcsqsize))
-allocate(yc_sq(ycsqsize))
-allocate(zc_sq(zcsqsize))
-allocate(xg_sq(xcsqsize))
-allocate(yg_sq(ycsqsize))
+ ! Let all other processors wait before nc_write_squished_file finishes
+ call task_sync()
+ s_shape_file_id = nc_open_file_readonly(squished_model_shape_file)
 
-call nc_get_variable(shape_file_id, 'XC_3D', XC_sq)
-call nc_get_variable(shape_file_id, 'YC_3D', YC_sq)
-call nc_get_variable(shape_file_id, 'ZC_3D', ZC_sq)
+ call nc_get_variable_size(s_shape_file_id, 'XC_sq', xcsqsize)
+ call nc_get_variable_size(s_shape_file_id, 'YC_sq', ycsqsize)
+ call nc_get_variable_size(s_shape_file_id, 'ZC_sq', zcsqsize)
+
+ ! Allocate the variable and get the values
+ allocate(xc_sq(xcsqsize))
+ allocate(yc_sq(ycsqsize))
+ allocate(zc_sq(zcsqsize))
+ allocate(xg_sq(xcsqsize))
+ allocate(yg_sq(ycsqsize))
+
+ call nc_get_variable(s_shape_file_id, 'XC_sq', XC_sq)
+ call nc_get_variable(s_shape_file_id, 'YC_sq', YC_sq)
+ call nc_get_variable(s_shape_file_id, 'ZC_sq', ZC_sq)
 
 ! EL: tentative solution of XG values
-do i=1, xcsqsize
-	XG_sq(i) = XC_sq(i) - 0.5*delX(1)
-	YG_sq(i) = YC_sq(i) - 0.5*delY(1)
-enddo
+ do i=1, xcsqsize
+	 XG_sq(i) = XC_sq(i) - 0.5*delX(1)
+	 YG_sq(i) = YC_sq(i) - 0.5*delY(1)
+ enddo
+ 
+ 
+ 
+ domain_id = add_domain(squished_model_shape_file, nvars, &
+                    var_names, quantity_list, clamp_vals, update_list )
+ ! Use the squished model shape file for all following operations
+ model_shape_file = squished_model_shape_file
+
+else
+ domain_id = add_domain(model_shape_file, nvars, &
+                    var_names, quantity_list, clamp_vals, update_list )
+endif
+
+ model_size = get_domain_size(domain_id)
 
 
-model_size = get_domain_size(domain_id)
+
 
 if (do_output()) write(*,*) 'model_size = ', model_size
 
@@ -1162,13 +1194,44 @@ end subroutine set_model_end_time
 !> required for all filter applications as it is required for computing
 !> the distance between observations and state variables.
 
+
 subroutine get_state_meta_data(index_in, location, qty)
 
 integer(i8),         intent(in)  :: index_in
 type(location_type), intent(out) :: location
 integer,             intent(out), optional :: qty
 
-real(r4) :: lat, lon, depth
+real(r8) :: lat, lon, depth
+integer  :: iloc, jloc, kloc
+
+if ( .not. module_initialized ) call static_init_model
+
+call get_model_variable_indices(index_in, iloc, jloc, kloc, kind_index = qty)
+
+lon   = XC(iloc)
+lat   = YC(jloc)
+depth = ZC(kloc)
+
+! Acounting for surface variables and those on staggered grids
+! MEG: check chl's depth here
+if (qty == QTY_SEA_SURFACE_HEIGHT .or. &
+    qty == QTY_SURFACE_CHLOROPHYLL) depth = 0.0_r8
+if (qty == QTY_U_CURRENT_COMPONENT) lon   = XG(iloc)
+if (qty == QTY_V_CURRENT_COMPONENT) lat   = YG(jloc)  
+
+location = set_location(lon, lat, depth, VERTISHEIGHT)
+
+end subroutine get_state_meta_data
+
+
+
+subroutine get_state_meta_data_sq(index_in, location, qty)
+
+integer(i8),         intent(in)  :: index_in
+type(location_type), intent(out) :: location
+integer,             intent(out), optional :: qty
+
+real(r8) :: lat, lon, depth
 integer  :: iloc, jloc, kloc
 
 if ( .not. module_initialized ) call static_init_model
@@ -1188,9 +1251,9 @@ if (qty == QTY_SEA_SURFACE_HEIGHT .or. &
 if (qty == QTY_U_CURRENT_COMPONENT) lon   = XG_sq(iloc)
 if (qty == QTY_V_CURRENT_COMPONENT) lat   = YG_sq(iloc)  
 
-location = set_location(real(lon, r8), real(lat, r8), real(depth, r8), VERTISHEIGHT)
+location = set_location(lon, lat, depth, VERTISHEIGHT)
 
-end subroutine get_state_meta_data
+end subroutine get_state_meta_data_sq
 
 
 
@@ -2119,8 +2182,348 @@ endif
 end subroutine adjust_clamp
 
 
+! subroutine nc_write_squished_file(in_filename, out_filename, ngood, var_names, & 
+!                   quantity_list, clamp_vals, update_list)
+
+! character(len=*), intent(in) :: in_filename
+! character(len=*), intent(in) :: out_filename
+! integer         , intent(in) :: ngood
+! character(len=*), intent(in) :: var_names(:)
+! integer         , intent(in) :: quantity_list(:)
+! real(r8)        , intent(in) :: clamp_vals(:,:)
+! logical         , intent(in) :: update_list(:)
+
+! integer  :: ivar, in_ncFileID, out_ncFileID
+! integer  :: size_3d(3), size_2d(2)   ! 3d and 2d variable sizes
+! integer  :: size_3d_sq, size_2d_sq  ! SQUISHED 3d and 2d variable sizes
+! integer  :: ct_2d = 1, ct_3d = 1
+! logical  :: size_recorded_2d = .false., size_recorded_3d = .false.  ! flag for whether squished size has been recorded
+! logical  :: location_recorded = .false. 
+! integer  :: out_status
+! integer  :: ix, iy, iz, i_2d, i_3d
+
+! ! Original arrays
+! real(r4), allocatable  :: arr_3d(:,:,:,:)            ! n_3d, Nx, Ny, Nz
+! real(r4), allocatable  :: arr_2d(:,:,:)              ! n_2d, Nx, Ny
+
+! ! Squished arrays
+! real(r4), allocatable  :: arr_3d_squished(:,:)       ! n_3d, size_3d_sq 
+! real(r4), allocatable  :: arr_2d_squished(:,:)       ! n_2d, size_2d_sq
+! real(r4), allocatable  :: xc_s(:), yc_s(:), zc_s(:)  ! size_3d_sq 
+! real(r4)               :: var_buff_3d(Nx, Ny, Nz)    ! 3d buffer for the array
+! real(r4)               :: var_buff_2d(Nx, Ny)        ! 2d buffer for the array
+
+! in_ncFileID = nc_open_file_readonly(in_filename)
+
+! size_3d = (/Nx, Ny, Nz/)
+! size_2d = (/Nx, Ny/)
+
+! allocate(arr_3d(n_3d, Nx, Ny, Nz))
+! allocate(arr_2d(n_2d, Nx, Ny))
+
+! out_ncFileID = nc_create_file(out_filename)
+
+! ct_3d = 1
+! ct_2d = 1
+! i_2d = 1
+! i_3d = 1
+
+! if (do_output()) write(*,*) 'before big loop'
+! if (do_output()) write(*,*) 'nvar', ngood
+! if (do_output()) write(*,*) 'size_3d', size_3d
+! if (do_output()) write(*,*) 'varnames', var_names
+! if (do_output()) write(*,*) 'quantity_list', quantity_list
+
+
+! do ivar=1, ngood
+!    if ( (quantity_list(ivar) == QTY_PHYTOPLANKTON_BIOMASS ) .OR. (quantity_list(ivar) == QTY_SEA_SURFACE_HEIGHT) ) then
+!       call nc_get_variable(in_ncFileID, var_names(ivar), var_buff_2d(:,:))
+      
+!       if (size_recorded_2d .eq. .false.) then
+!          ! Get the squished size for the 2d variables
+!          call nc_get_squished_size(var_buff_2d(:,:), FVAL, size_2d, size_2d_sq)
+!          call nc_define_dimension(out_ncFileID, 'dim_2d', size_2d_sq)
+!          if (do_output()) write(*,*) size_2d_sq
+!          allocate(arr_2d_squished(n_2d, size_2d_sq))
+!          size_recorded_2d = .true.
+!       endif
+      
+!       call nc_define_real_variable(out_ncFileID, var_names(ivar), 'dim_2d')
+!       ! ct_2d = 1
+!       do ix = 1,Nx
+!          do iy = 1,Ny
+!             if (var_buff_2d(ix, iy) /= FVAL) then
+!                arr_2d_squished(i_2d, ct_2d) = var_buff_2d(ix,iy)
+!                ct_2d = ct_2d + 1
+!             endif
+!          enddo
+!       enddo
+
+!       ! Moving onto the next variable
+!       i_2d = i_2d + 1
+!    else
+!       call nc_get_variable(in_ncFileID, var_names(ivar), var_buff_3d(:,:,:))   
+!       if (do_output()) write(*,*) 'value 1,1,1', var_buff_3d(1,1,1)
+!       if (size_recorded_3d .eq. .false.) then
+!          call nc_get_squished_size(var_buff_3d(:,:,:), FVAL, size_3d, size_3d_sq)
+!          call nc_define_dimension(out_ncFileID, 'dim_3d', size_3d_sq)
+!          if (do_output()) write(*,*) size_3d_sq
+
+!          allocate(arr_3d_squished(n_3d, size_3d_sq))
+!          allocate(xc_s(size_3d_sq))
+!          allocate(yc_s(size_3d_sq))
+!          allocate(zc_s(size_3d_sq))
+         
+!          size_recorded_3d = .true.
+!       endif      
+
+!       call nc_define_real_variable(out_ncFileID, var_names(ivar), 'dim_3d')
+
+!       ! ct_3d = 1
+      
+!       ! arr_3d_squished = pack(var_buff_3d, var_buff_3d /= FVAL)
+!       do i_3d=1, n_3d
+!          arr_3d_squished(i_3d, :) = pack(var_buff_3d, var_buff_3d /= FVAL)
+!       enddo
+
+!       ! do ix = 1,Nx
+!       !    do iy = 1,Ny
+!       !       do iz = 1,Nz
+!       !          if (var_buff_3d(ix, iy, iz) /= FVAL) then
+!       !             ! arr_3d_squished(i_3d, ct_3d) = var_buff_3d(ix,iy,iz)
+                  
+!       !             ! if (location_recorded .eq. .false.) then
+!       !             !    xc_s(ct_3d) = XC(ix)
+!       !             !    yc_s(ct_3d) = YC(iy)
+!       !             !    zc_s(ct_3d) = ZC(iz)
+!       !             ! endif
+
+!       !             ! ct_3d = ct_3d + 1
+!       !             if (do_output()) write(*,*) 'ct_3d', ct_3d
+!       !          endif
+!       !       enddo
+!       !    enddo
+!       ! enddo
+!       location_recorded = .true.
+!       i_3d = i_3d + 1
+
+!    endif
+! enddo
+
+! call nc_define_real_variable(out_ncFileID, 'XC_sq', 'dim_3d')
+! call nc_define_real_variable(out_ncFileID, 'YC_sq', 'dim_3d')
+! call nc_define_real_variable(out_ncFileID, 'ZC_sq', 'dim_3d')
+
+! call nc_check(nf90_enddef(out_ncFileID), "End of definition of output squished file: "//trim(out_filename))
+
+! i_2d = 1
+! i_3d = 1
+! ! Have to end the definition mode to put the variables
+! do ivar=1, ngood
+!    if ( (quantity_list(ivar) == QTY_PHYTOPLANKTON_BIOMASS ) .OR. (quantity_list(ivar) == QTY_SEA_SURFACE_HEIGHT) ) then
+!       call nc_put_variable(out_ncFileID, var_names(ivar), arr_2d_squished(i_2d, :))
+!       i_2d = i_2d + 1
+!    else
+!       call nc_put_variable(out_ncFileID, var_names(ivar), arr_3d_squished(i_3d, :))
+!       i_3d = i_3d + 1
+!    endif
+! enddo
+
+! ! Also put the dimension variable in the file
+! call nc_put_variable(out_ncFileID, 'XC_sq', xc_s)
+! call nc_put_variable(out_ncFileID, 'YC_sq', yc_s)
+! call nc_put_variable(out_ncFileID, 'ZC_sq', zc_s)
+
+! call nc_close_file(out_ncFileID)
+
+
+! end subroutine nc_write_squished_file
+
 !===================================================================
 ! End of MITgcm_ocean model_mod
 !===================================================================
+
+
+
+subroutine nc_write_squished_file(in_filename, out_filename, ngood, var_names, & 
+                  quantity_list, clamp_vals, update_list)
+
+
+character(len=*), intent(in) :: in_filename
+character(len=*), intent(in) :: out_filename
+integer         , intent(in) :: ngood
+character(len=*), intent(in) :: var_names(:)
+integer         , intent(in) :: quantity_list(:)
+real(r8)        , intent(in) :: clamp_vals(:,:)
+logical         , intent(in) :: update_list(:)
+
+real(r4), allocatable  :: psal(:,:,:), ptmp(:,:,:), uvel(:,:,:), vvel(:,:,:)
+real(r4), allocatable  :: no3(:,:,:), po4(:,:,:), o2(:,:,:), phy(:,:,:), alk(:,:,:)
+real(r4), allocatable  :: dic(:,:,:), dop(:,:,:), don(:,:,:), fet(:,:,:)
+real(r4), allocatable  :: eta(:,:), chl(:,:)
+real(r4), allocatable :: psal_f(:), ptmp_f(:), uvel_f(:), vvel_f(:)
+real(r4), allocatable :: no3_f(:), po4_f(:), o2_f(:), phy_f(:), alk_f(:)
+real(r4), allocatable :: dic_f(:), dop_f(:), don_f(:), fet_f(:)
+real(r4), allocatable :: eta_f(:), chl_f(:)
+real(r4), allocatable :: xc_s(:), yc_s(:), zc_s(:)
+integer               :: sq_size_2d, sq_size_3d
+integer               :: dimarr_2d_ct, dimarr_3d_ct
+integer               :: i,j,k
+integer               :: in_ncFileID, out_ncFileID
+
+! Open the original file
+in_ncFileID = nc_open_file_readonly(in_filename)
+
+! Allocate and get all the variables
+allocate(psal(Nx, Ny, Nz))
+allocate(ptmp(Nx, Ny, Nz))
+allocate(uvel(Nx, Ny, Nz))
+allocate(vvel(Nx, Ny, Nz))
+allocate(no3(Nx, Ny, Nz))
+allocate(po4(Nx, Ny, Nz))
+allocate(o2(Nx, Ny, Nz))
+allocate(phy(Nx, Ny, Nz))
+allocate(alk(Nx, Ny, Nz))
+allocate(dic(Nx, Ny, Nz))
+allocate(dop(Nx, Ny, Nz))
+allocate(don(Nx, Ny, Nz))
+allocate(fet(Nx, Ny, Nz))
+allocate(eta(Nx, Ny))
+allocate(chl(Nx, Ny))
+
+call nc_get_variable(in_ncFileID, 'PSAL', psal)
+call nc_get_variable(in_ncFileID, 'PTMP', ptmp)
+call nc_get_variable(in_ncFileID, 'UVEL', uvel)
+call nc_get_variable(in_ncFileID, 'VVEL', vvel)
+call nc_get_variable(in_ncFileID, 'NO3', no3)
+call nc_get_variable(in_ncFileID, 'PO4', po4)
+call nc_get_variable(in_ncFileID, 'O2', o2)
+call nc_get_variable(in_ncFileID, 'PHY', phy)
+call nc_get_variable(in_ncFileID, 'ALK', alk)
+call nc_get_variable(in_ncFileID, 'DIC', dic)
+call nc_get_variable(in_ncFileID, 'DOP', dop)
+call nc_get_variable(in_ncFileID, 'DON', don)
+call nc_get_variable(in_ncFileID, 'FET', fet)
+call nc_get_variable(in_ncFileID, 'ETA', eta)
+call nc_get_variable(in_ncFileID, 'CHL', chl)
+
+! Get the squished sizes
+call nc_get_squished_size(psal, FVAL, (/Nx, Ny, Nz/), sq_size_3d)
+call nc_get_squished_size(chl, FVAL, (/Nx, Ny/), sq_size_2d)
+
+allocate(psal_f(sq_size_3d))
+allocate(ptmp_f(sq_size_3d))
+allocate(uvel_f(sq_size_3d))
+allocate(vvel_f(sq_size_3d))
+allocate(no3_f(sq_size_3d))
+allocate(po4_f(sq_size_3d))
+allocate(o2_f(sq_size_3d))
+allocate(phy_f(sq_size_3d))
+allocate(alk_f(sq_size_3d))
+allocate(dic_f(sq_size_3d))
+allocate(dop_f(sq_size_3d))
+allocate(don_f(sq_size_3d))
+allocate(fet_f(sq_size_3d))
+allocate(eta_f(sq_size_2d))
+allocate(chl_f(sq_size_2d))
+
+allocate(xc_s(sq_size_3d))
+allocate(yc_s(sq_size_3d))
+allocate(zc_s(sq_size_3d))
+
+dimarr_3d_ct = 1
+dimarr_2d_ct = 1 
+
+do k=1, Nz
+   do i=1, Nx
+      do j=1, Ny
+         if (psal(i,j,k) /= FVAL) then
+            xc_s(dimarr_3d_ct) = XC(i)
+            yc_s(dimarr_3d_ct) = YC(j)
+            zc_s(dimarr_3d_ct) = ZC(k)
+            psal_f(dimarr_3d_ct) = psal(i,j,k)
+            ptmp_f(dimarr_3d_ct) = ptmp(i,j,k)
+            uvel_f(dimarr_3d_ct) = uvel(i,j,k)
+            vvel_f(dimarr_3d_ct) = vvel(i,j,k)
+            no3_f(dimarr_3d_ct) = no3(i,j,k)
+            po4_f(dimarr_3d_ct) = po4(i,j,k)
+            o2_f(dimarr_3d_ct) = o2(i,j,k)
+            phy_f(dimarr_3d_ct) = phy(i,j,k)
+            alk_f(dimarr_3d_ct) = alk(i,j,k)
+            dic_f(dimarr_3d_ct) = dic(i,j,k)
+            dop_f(dimarr_3d_ct) = dop(i,j,k)
+            don_f(dimarr_3d_ct) = don(i,j,k)
+            fet_f(dimarr_3d_ct) = fet(i,j,k)
+            dimarr_3d_ct = dimarr_3d_ct + 1
+         endif
+      enddo
+   enddo
+enddo
+
+do i=1, Nx
+   do j=1, Ny
+      if (chl(i,j) /= FVAL) then
+ 			eta_f(dimarr_2d_ct) = eta(i,j)
+			chl_f(dimarr_2d_ct) = chl(i,j)
+         dimarr_2d_ct = dimarr_2d_ct + 1
+      endif
+   enddo
+enddo
+
+out_ncFileID = nc_create_file(out_filename)
+
+
+call nc_define_dimension(out_ncFileID, 'dim_3d', sq_size_3d)
+call nc_define_dimension(out_ncFileID, 'dim_2d', sq_size_2d)
+
+call nc_define_real_variable(out_ncFileID, 'XC_sq', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'YC_sq', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'ZC_sq', 'dim_3d')
+
+call nc_define_real_variable(out_ncFileID, 'PSAL', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'PTMP', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'UVEL', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'VVEL', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'NO3', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'PO4', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'O2', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'PHY', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'ALK', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'DIC', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'DOP', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'DON', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'FET', 'dim_3d')
+call nc_define_real_variable(out_ncFileID, 'ETA', 'dim_2d')
+call nc_define_real_variable(out_ncFileID, 'CHL', 'dim_2d')
+
+call nc_check(nf90_enddef(out_ncFileID), "End of definition of output squished file: "//trim(out_filename))
+
+call nc_put_variable(out_ncFileID, 'XC_sq', xc_s)
+call nc_put_variable(out_ncFileID, 'YC_sq', yc_s)
+call nc_put_variable(out_ncFileID, 'ZC_sq', zc_s)
+
+call nc_put_variable(out_ncFileID, 'PSAL', psal_f)
+call nc_put_variable(out_ncFileID, 'PTMP', ptmp_f)
+call nc_put_variable(out_ncFileID, 'UVEL', uvel_f)
+call nc_put_variable(out_ncFileID, 'VVEL', vvel_f)
+call nc_put_variable(out_ncFileID, 'NO3', no3_f)
+call nc_put_variable(out_ncFileID, 'PO4', po4_f)
+call nc_put_variable(out_ncFileID, 'O2', o2_f)
+call nc_put_variable(out_ncFileID, 'PHY', phy_f)
+call nc_put_variable(out_ncFileID, 'ALK', alk_f)
+call nc_put_variable(out_ncFileID, 'DIC', dic_f)
+call nc_put_variable(out_ncFileID, 'DOP', dop_f)
+call nc_put_variable(out_ncFileID, 'DON', don_f)
+call nc_put_variable(out_ncFileID, 'FET', fet_f)
+call nc_put_variable(out_ncFileID, 'ETA', eta_f)
+call nc_put_variable(out_ncFileID, 'CHL', chl_f)
+
+call nc_close_file(out_ncFileID)
+
+end subroutine nc_write_squished_file
+
+
+
+
 end module model_mod
 

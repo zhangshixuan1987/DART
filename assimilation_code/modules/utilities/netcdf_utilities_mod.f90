@@ -63,7 +63,8 @@ public :: nc_check,                       &
           nc_begin_define_mode,           &
           nc_end_define_mode,             &
           nc_synchronize_file,            &
-          NF90_MAX_NAME, NF90_MAX_VAR_DIMS
+          NF90_MAX_NAME, NF90_MAX_VAR_DIMS, & 
+          nc_get_squished_size       
 
 
 ! note here that you only need to distinguish between
@@ -175,6 +176,17 @@ interface nc_get_variable_size
    module procedure nc_get_variable_size_1d
    module procedure nc_get_variable_size_Nd
 end interface
+
+! nc_get_squished_size: additional functions needed for determining the squished state variable size
+interface nc_get_squished_size
+   module procedure nc_get_squished_size_real_1d
+   module procedure nc_get_squished_size_real_2d
+   module procedure nc_get_squished_size_real_3d
+   module procedure nc_get_squished_size_double_1d
+   module procedure nc_get_squished_size_double_2d
+   module procedure nc_get_squished_size_double_3d
+end interface
+
 
 character(len=*), parameter :: source = 'netcdf_utilities_mod.f90'
 
@@ -2269,6 +2281,212 @@ do i=1, ndims
 enddo
 
 end subroutine nc_get_variable_size_Nd
+
+!--------------------------------------------------------------------
+
+subroutine nc_get_squished_size_real_1d(varvals, fillval, varsize, squishedsize, context, filename)
+
+real(r4)        , intent(in)  :: varvals(:)
+integer         , intent(in)  :: varsize
+integer         , intent(in)  :: fillval  
+integer         , intent(out) :: squishedsize
+character(len=*), intent(in), optional :: context
+character(len=*), intent(in), optional :: filename
+! Other variables
+
+integer                       :: i
+
+character(len=*), parameter :: routine = 'nc_get_squished_size_real_1d'
+
+! Get the variable size
+! call nc_get_variable_size(ncid, varname, varsize, context, filename)
+! allocate(varvals(varsize))
+! ! Get the variable values 
+! call nc_get_variable(ncid, varname, varvals, context, filename)
+
+squishedsize = varsize
+! For all the variables
+do i=1, varsize
+   if (varvals(i) .eq. fillval) then
+      squishedsize = squishedsize - 1
+   endif
+enddo
+
+end subroutine nc_get_squished_size_real_1d
+
+!--------------------------------------------------------------------
+
+subroutine nc_get_squished_size_real_2d(varvals, fillval, varsize, squishedsize, context, filename)
+
+real(r4)        , intent(in)  :: varvals(:,:)
+integer         , intent(in)  :: fillval
+integer         , intent(in)  :: varsize(2)
+integer         , intent(out) :: squishedsize
+character(len=*), intent(in), optional :: context
+character(len=*), intent(in), optional :: filename
+
+! Other variables
+
+integer                       :: i, j
+
+character(len=*), parameter :: routine = 'nc_get_squished_size_real_2d'
+
+
+! Get the variable size
+! call nc_get_variable_size(ncid, varname, varsize, context, filename)
+! allocate(varvals(varsize(1), varsize(2)))
+! ! Get the variable values 
+! call nc_get_variable(ncid, varname, varvals, context, filename)
+squishedsize = varsize(1) * varsize(2)
+! For all the variables
+do i=1, varsize(1)
+   do j=1, varsize(2)
+      if (varvals(i,j) .eq. fillval) then
+         squishedsize = squishedsize - 1
+      endif
+   enddo
+enddo
+
+end subroutine nc_get_squished_size_real_2d
+
+!--------------------------------------------------------------------
+
+subroutine nc_get_squished_size_real_3d(varvals, fillval, varsize, squishedsize, context, filename)
+
+real(r4)        , intent(in)  :: varvals(:,:,:)
+integer         , intent(in)  :: fillval
+integer         , intent(in)  :: varsize(3)
+integer         , intent(out) :: squishedsize
+character(len=*), intent(in), optional :: context
+character(len=*), intent(in), optional :: filename
+
+! Other variables
+integer                       :: i, j, k
+
+character(len=*), parameter :: routine = 'nc_get_squished_size_real_3d'
+
+! Get the variable size
+! call nc_get_variable_size(ncid, varname, varsize, context, filename)
+! allocate(varvals(varsize(1), varsize(2), varsize(3)))
+! ! Get the variable values 
+! call nc_get_variable(ncid, varname, varvals, context, filename)
+
+squishedsize = varsize(1) * varsize(2) * varsize(3)
+! For all the variables
+do i=1, varsize(1)
+   do j=1, varsize(2)
+      do k=1, varsize(3)
+         if (varvals(i,j,k) .eq. fillval) then
+            squishedsize = squishedsize - 1
+         endif
+      enddo
+   enddo
+enddo
+
+end subroutine nc_get_squished_size_real_3d
+
+!------------------------------------------------------------------
+
+subroutine nc_get_squished_size_double_1d(varvals, fillval, varsize, squishedsize, context, filename)
+
+real(digits12)  , intent(in)  :: varvals(:)
+integer         , intent(in)  :: varsize
+integer         , intent(in)  :: fillval  
+integer         , intent(out) :: squishedsize
+character(len=*), intent(in), optional :: context
+character(len=*), intent(in), optional :: filename
+
+! Other variables
+
+integer                       :: i
+
+character(len=*), parameter :: routine = 'nc_get_squished_size_double_1d'
+
+! Get the variable size
+! call nc_get_variable_size(ncid, varname, varsize, context, filename)
+! allocate(varvals(varsize))
+! ! Get the variable values 
+! call nc_get_variable(ncid, varname, varvals, context, filename)
+
+squishedsize = varsize
+! For all the variables
+do i=1, varsize
+   if (varvals(i) .eq. fillval) then
+      squishedsize = squishedsize - 1
+   endif
+enddo
+
+end subroutine nc_get_squished_size_double_1d
+
+!--------------------------------------------------------------------
+
+subroutine nc_get_squished_size_double_2d(varvals, fillval, varsize, squishedsize, context, filename)
+
+real(digits12)  , intent(in)  :: varvals(:,:)
+integer         , intent(in)  :: varsize(2)
+integer         , intent(in)  :: fillval  
+integer         , intent(out) :: squishedsize
+character(len=*), intent(in), optional :: context
+character(len=*), intent(in), optional :: filename
+
+! Other variables
+integer                       :: i, j
+
+character(len=*), parameter :: routine = 'nc_get_squished_size_double_2d'
+
+! Get the variable size
+! call nc_get_variable_size(ncid, varname, varsize, context, filename)
+! allocate(varvals(varsize(1), varsize(2)))
+! ! Get the variable values 
+! call nc_get_variable(ncid, varname, varvals, context, filename)
+
+squishedsize = varsize(1) * varsize(2)
+! For all the variables
+do i=1, varsize(1)
+   do j=1, varsize(2)
+      if (varvals(i,j) .eq. fillval) then
+         squishedsize = squishedsize - 1
+      endif
+   enddo
+enddo
+
+end subroutine nc_get_squished_size_double_2d
+
+!--------------------------------------------------------------------
+
+subroutine nc_get_squished_size_double_3d(varvals, fillval, varsize, squishedsize, context, filename)
+
+real(digits12)  , intent(in)  :: varvals(:,:,:)
+integer         , intent(in)  :: varsize(3)
+integer         , intent(in)  :: fillval  
+integer         , intent(out) :: squishedsize
+character(len=*), intent(in), optional :: context
+character(len=*), intent(in), optional :: filename
+
+! Other variables
+integer                       :: i, j, k
+
+character(len=*), parameter :: routine = 'nc_get_squished_size_double_3d'
+
+! Get the variable size
+! call nc_get_variable_size(ncid, varname, varsize, context, filename)
+! allocate(varvals(varsize(1), varsize(2), varsize(3)))
+! ! Get the variable values 
+! call nc_get_variable(ncid, varname, varvals, context, filename)
+
+squishedsize = varsize(1) * varsize(2) * varsize(3)
+! For all the variables
+do i=1, varsize(1)
+   do j=1, varsize(2)
+      do k=1, varsize(3)
+         if (varvals(i,j,k) .eq. fillval) then
+            squishedsize = squishedsize - 1
+         endif
+      enddo
+   enddo
+enddo
+
+end subroutine nc_get_squished_size_double_3d
 
 !------------------------------------------------------------------
 

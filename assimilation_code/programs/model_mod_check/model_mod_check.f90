@@ -69,6 +69,7 @@ integer, parameter :: MAX_FILES = 1000
 logical                       :: single_file = .false.
 integer                       :: num_ens = 1
 character(len=256)            :: input_state_files(MAX_FILES)  = 'null'
+character(len=256)            :: squished_input_state_files(MAX_FILES) = 'null'
 character(len=256)            :: output_state_files(MAX_FILES) = 'null'
 character(len=256)            :: all_metadata_file = 'metadata.txt'
 integer(i8)                   :: x_ind   = -1
@@ -76,6 +77,7 @@ real(r8), dimension(3)        :: loc_of_interest = -1.0_r8
 character(len=metadatalength) :: quantity_of_interest = 'NONE'
 character(len=metadatalength) :: interp_test_vertcoord = 'VERTISHEIGHT'
 logical                       :: verbose = .FALSE.
+logical                       :: check_squish = .FALSE.
 integer                       :: test1thru = MAX_TESTS
 integer                       :: run_tests(MAX_TESTS) = -1
 real(r8)               :: interp_test_dlat  = 10.0_r8
@@ -101,7 +103,7 @@ namelist /model_mod_check_nml/ x_ind, num_ens,                             &
                                interp_test_dz,     interp_test_zrange,     &
                                verbose, test1thru, run_tests, interp_test_vertcoord,  &
                                single_file, input_state_files, output_state_files, &
-                               all_metadata_file
+                               all_metadata_file, squished_input_state_files, check_squish
 
 ! io variables
 integer                   :: iunit, io
@@ -597,7 +599,11 @@ type(ensemble_type), intent(inout) :: ens_handle
 ! be ens_size but rather a single file (or multiple files if more than one domain)
 
 allocate(file_array_input( num_ens, num_domains))
+if (check_squish) then
+file_array_input  = RESHAPE(squished_input_state_files,  (/num_ens,  num_domains/))
+else
 file_array_input  = RESHAPE(input_state_files,  (/num_ens,  num_domains/))
+endif
 
 ! Test the read portion.
 call io_filenames_init(file_info_input,             &

@@ -915,7 +915,6 @@ COPIES: do copy = 1, state_ens_handle%my_num_copies
    endif
 
    block_size = get_domain_size(domain)
-
    iend = istart + block_size -1
 
    if (query_read_copy(name_handle, copy)) then
@@ -1118,7 +1117,8 @@ COPIES: do c = 1, ens_size
          ret = nf90_open(netcdf_filename, NF90_NOWRITE, ncfile)
          call nc_check(ret, 'read_transpose opening', netcdf_filename)
       endif
-
+   write(*,*) 'num_vars', state_ens_handle%num_vars
+   write(*,*) 'num_state_variables', num_state_variables
    endif
 
    ! Read the state variables into a buffer to distribute.
@@ -3054,6 +3054,60 @@ endif
 end subroutine set_dart_missing_value
 
 !--------------------------------------------------------
+
+! subroutine squish_dart_array(array, domain, variable, squished_array, squished_length)
+
+! ! Change the array to in only, make a squished_array as the output
+! real(r8), intent(in)     :: array(:)
+! integer,  intent(in)     :: domain
+! integer,  intent(in)     :: variable
+! real(r8), intent(out)    :: squished_array(:)
+! integer(i8), intent(out) :: squished_length
+
+! integer        :: model_missing_valueINT
+! real(r4)       :: model_missing_valueR4
+! real(digits12) :: model_missing_valueR8
+
+! ! Use the pack function to remove all values with missingR8
+! if ( get_has_missing_value(domain, variable) ) then
+
+!    select case ( get_xtype(domain, variable) )
+!       case ( NF90_INT )
+!          call get_missing_value(domain, variable, model_missing_valueINT)
+!          squished_array = pack(array, array /= model_missing_valueINT)
+!       case ( NF90_FLOAT )
+!          call get_missing_value(domain, variable, model_missing_valueR4)
+!          squished_array = pack(array, array /= model_missing_valueR4)
+!       case ( NF90_DOUBLE )
+!          call get_missing_value(domain, variable, model_missing_valueR8)
+!          squished_array = pack(array, array /= model_missing_valueR8)
+!    end select
+
+! endif
+
+! if ( get_has_FillValue(domain, variable) ) then
+
+!    select case ( get_xtype(domain, variable) )
+!       case ( NF90_INT )
+!          call get_FillValue(domain, variable, model_missing_valueINT)
+!          squished_array = pack(array, array /= model_missing_valueINT)
+!       case ( NF90_FLOAT )
+!          call get_FillValue(domain, variable, model_missing_valueR4)
+!          squished_array = pack(array, array /= model_missing_valueR4)
+!       case ( NF90_DOUBLE )
+!          call get_FillValue(domain, variable, model_missing_valueR8)
+!          squished_array = pack(array, array /= model_missing_valueR8)
+!    end select
+
+! endif
+
+! squished_length = size(squished_array)
+
+! end subroutine squish_dart_array
+
+
+
+!--------------------------------------------------------
 !> replace the DART missing value code with the 
 !> original netCDF missing_value (or _FillValue) value.
 
@@ -3102,7 +3156,6 @@ endif
 
 end subroutine set_model_missing_value
 
-!--------------------------------------------------------
 !--------------------------------------------------------
 
 !> @}
