@@ -7,7 +7,8 @@ module model_mod
 
 use        types_mod, only : r8, i8, MISSING_R8, digits12
 
-use time_manager_mod, only : time_type, set_time, GREGORIAN
+use time_manager_mod, only : time_type, set_time, GREGORIAN, set_date, &
+                             set_calendar_type
 
 use     location_mod, only : location_type, get_close_type, &
                              set_location, set_location_missing, &
@@ -24,7 +25,9 @@ use    utilities_mod, only : register_module, error_handler, &
 use netcdf_utilities_mod, only : nc_add_global_attribute, nc_synchronize_file, &
                                  nc_add_global_creation_time, &
                                  nc_begin_define_mode, nc_end_define_mode, &
-                                 NF90_MAX_NAME
+                                 NF90_MAX_NAME, nc_get_variable_size, &
+                                 nc_get_variable, nc_close_file, nc_check, &
+                                 nc_open_file_readonly, nc_get_variable_size
 
 use state_structure_mod, only : add_domain, get_domain_size, get_model_variable_indices
 
@@ -32,10 +35,12 @@ use obs_kind_mod, only : get_index_for_quantity
 
 use ensemble_manager_mod, only : ensemble_type
 
-use default_model_mod, only : read_model_time, write_model_time, &
+use default_model_mod, only : write_model_time, &
                               init_time => fail_init_time, &
                               init_conditions => fail_init_conditions, &
                               convert_vertical_obs, convert_vertical_state, adv_1step
+
+use netcdf ! no get_char in netcdf_utilities_mod
 
 implicit none
 private
@@ -159,6 +164,8 @@ call check_namelist_read(iunit, io, "model_nml")
 ! Record the namelist values used for the run 
 if (do_nml_file()) write(nmlfileunit, nml=model_nml)
 if (do_nml_term()) write(     *     , nml=model_nml)
+
+call set_calendar_type(calendar_type)
 
 ! This time is both the minimum time you can ask the model to advance
 ! (for models that can be advanced by filter) and it sets the assimilation
@@ -417,6 +424,51 @@ print*, 'not done'
 end subroutine pert_model_copies
 
 !------------------------------------------------------------------
+function read_model_time(filename)
+
+character(len=*),  intent(in) :: filename
+type(time_type)               :: read_model_time
+
+character(len=*), parameter :: routine = 'read_model_time'
+integer :: ncid, ret, var_id
+integer :: dim_size(2) ! wrf netcdf: char Times(Time, DateStrLen)
+character(len=19) :: timestring ! e.g. 2007-04-26_00:00:00
+integer           :: year, month, day, hour, minute, second
+
+ncid = nc_open_file_readonly(filename, routine)
+
+call nc_get_variable_size(ncid, 'Times', dim_size, routine)
+
+ret = nf90_inq_varid(ncid, "Times", var_id)
+call nc_check(ret, routine, 'inq_varid Times')
+
+! last slice of Time dimension
+ret = nf90_get_var(ncid, var_id, timestring, start = (/ 1, dim_size(2) /))
+call nc_check(ret, routine, 'get_var Times')
+
+call get_wrf_date(timestring, year, month, day, hour, minute, second)
+read_model_time = set_date(year, month, day, hour, minute, second)
+
+call  nc_close_file(ncid, routine)
+
+end function read_model_time
+
+!------------------------------------------------------------------
+!----------------------------------------------------------------------
+subroutine get_wrf_date(tstring, year, month, day, hour, minute, second)
+
+character(len=19), intent(in)  :: tstring ! YYYY-MM-DD_hh:mm:ss
+integer,           intent(out) :: year, month, day, hour, minute, second
+
+read(tstring( 1: 4),'(i4)') year
+read(tstring( 6: 7),'(i2)') month
+read(tstring( 9:10),'(i2)') day
+read(tstring(12:13),'(i2)') hour
+read(tstring(15:16),'(i2)') minute
+read(tstring(18:19),'(i2)') second
+
+end subroutine get_wrf_date
+
 !------------------------------------------------------------------
 ! Verify that the namelist was filled in correctly, and check
 ! that there are valid entries for the dart_kind.
