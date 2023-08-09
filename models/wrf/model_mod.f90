@@ -233,14 +233,22 @@ type(ensemble_type), intent(in) :: state_handle
 integer,             intent(in) :: ens_size
 type(location_type), intent(in) :: location
 integer,             intent(in) :: qty
-real(r8),           intent(out) :: expected_obs(ens_size) !< array of interpolated values
+real(r8),           intent(out) :: expected_obs(ens_size) ! array of interpolated values
 integer,            intent(out) :: istatus(ens_size)
+
+integer, parameter :: FAILED_BOUNDS_CHECK = 44
 
 if ( .not. module_initialized ) call static_init_model
 
 expected_obs(:) = MISSING_R8
 
 istatus(:) = 1
+
+if ( bounds_check_fail() ) then
+   istatus(:) = FAILED_BOUNDS_CHECK
+   return
+endif
+
 
 end subroutine model_interpolate
 
@@ -737,6 +745,16 @@ endif
 end function on_w_grid
 !------------------------------------------------------------------
 !------------------------------------------------------------------
+
+function bounds_check_fail()
+
+logical :: bounds_check_fail
+
+bounds_check_fail = .true.
+
+end function bounds_check_fail
+!------------------------------------------------------------------
+! Vortex
 
 
 end module model_mod
