@@ -29,7 +29,8 @@ use netcdf_utilities_mod, only : nc_add_global_attribute, nc_synchronize_file, &
                                  nc_get_variable, nc_close_file, nc_check, &
                                  nc_open_file_readonly, nc_get_variable_size
 
-use state_structure_mod, only : add_domain, get_domain_size, get_model_variable_indices
+use state_structure_mod, only : add_domain, get_domain_size, get_model_variable_indices, &
+                                get_dim_name, get_num_dims
 
 use obs_kind_mod, only : get_index_for_quantity
 
@@ -74,7 +75,7 @@ integer, parameter :: MAX_STATE_VARIABLES = 100
 integer, parameter :: NUM_STATE_TABLE_COLUMNS = 4
 integer, parameter :: NUM_BOUNDS_TABLE_COLUMNS = 4
 
-integer, allocatable :: dom_id(:)
+integer, allocatable :: wrf_dom(:)
 
 
 !-- Namelist with default values --
@@ -127,10 +128,13 @@ allow_obs_below_vol, &
 log_horz_interpM, &
 log_horz_interpQ
 
-type grid
+type grid_ll
   real(r8), dimension(:,:),   allocatable :: latitude, latitude_u, latitude_v
   real(r8), dimension(:,:),   allocatable :: longitude, longitude_u, longitude_v
-end type grid
+end type grid_ll
+
+! need grid for each domain
+type(grid_ll), allocatable :: grid(:)
 
 integer(i8) :: model_size
 
@@ -175,7 +179,7 @@ print*, 'FAKE model_dt', model_dt
 assim_dt = (assimilation_period_seconds / model_dt) * model_dt
 assimilation_time_step = set_time(assim_dt)
 
-allocate(dom_id(num_domains))
+allocate(wrf_dom(num_domains), grid(num_domains))
 
 call verify_state_variables(nfields, varname, state_qty, update_var, in_domain)
 
@@ -189,15 +193,17 @@ do i = 1, num_domains
   end do
 
   write( idom , '(I1)') i
-  dom_id(i) = add_domain('wrfinput_d0'//idom, &
+  wrf_dom(i) = add_domain('wrfinput_d0'//idom, &
                           num_vars=count(domain_mask), &
                           var_names = pack(varname(1:nfields), domain_mask), &
                           kind_list = pack(state_qty(1:nfields), domain_mask), &
                           !clamp_vals  = &
                           update_list = pack(update_var(1:nfields), domain_mask) )
    
-  model_size = model_size + get_domain_size(dom_id(i))
+  model_size = model_size + get_domain_size(wrf_dom(i))
 enddo
+
+call read_grid()
 
 call set_vertical_localization_coord(vert_localization_coord)
  
@@ -271,9 +277,10 @@ integer :: i, j, k, id, var_id, state_id, qty
 
 if ( .not. module_initialized ) call static_init_model
 
+! wrf domain may not equal state_id
 call get_model_variable_indices(index_in, i, j, k, var_id=var_id, dom_id=state_id, kind_index=qty)
 
-location = convert_indices_to_lon_lat_lev(i, j, k, qty)
+location = convert_indices_to_lon_lat_lev(i, j, k, var_id, state_id)
 
 ! return DART variable qty if requested
 if(present(qty_out)) qty_out = qty
@@ -281,16 +288,82 @@ if(present(qty_out)) qty_out = qty
 end subroutine get_state_meta_data
 
 !------------------------------------------------------------------
-function convert_indices_to_lon_lat_lev(i, j, k, qty)
+function convert_indices_to_lon_lat_lev(i, j, k, var_id, state_id)
 
-integer, intent(in) :: i, j, k
-integer, intent(in) :: qty
+integer, intent(in) :: i, j, k, var_id, state_id
 type(location_type) :: convert_indices_to_lon_lat_lev
 
-print*, 'not done'
-convert_indices_to_lon_lat_lev = set_location(1.0_r8,2.0_r8,3.0_r8, VERTISLEVEL)
+real(r8) :: long, lat, lev
+integer :: dom_id
+
+dom_id = get_wrf_domain(state_id)
+
+if ( on_u_grid(state_id, var_id) ) then
+   long = grid(dom_id)%longitude_u(i,j)
+   lat = grid(dom_id)%latitude_u(i,j)
+elseif ( on_v_grid(state_id, var_id) ) then
+   long = grid(dom_id)%longitude_v(i,j)
+   lat = grid(dom_id)%latitude_v(i,j)
+else ! on mass grid
+   long = grid(dom_id)%longitude(i,j)
+   lat = grid(dom_id)%latitude(i,j)
+endif
+
+! dart expects longitude [0,360]
+do while (long <   0.0_r8)
+   long = long + 360.0_r8
+end do
+do while (long > 360.0_r8)
+   long = long - 360.0_r8
+end do
+
+
+if ( on_w_grid(state_id, var_id) ) then
+   lev = real(k) - 0.5_r8
+else
+   lev = real(k)
+endif
+
+convert_indices_to_lon_lat_lev = set_location(long,lat,lev, VERTISLEVEL)
 
 end function convert_indices_to_lon_lat_lev
+
+!------------------------------------------------------------------
+! which grid a variable is on.
+!   querying dimension here, could do by qty?
+!------------------------------------------------------------------
+function on_u_grid(state_id, ivar)
+integer, intent(in) :: state_id, ivar
+logical :: on_u_grid
+
+on_u_grid = (get_dim_name(state_id, ivar, 1) == 'west_east_stag')
+
+end function
+
+!------------------------------------------------------------------
+function on_v_grid(state_id, ivar)
+integer, intent(in) :: state_id, ivar
+logical :: on_v_grid
+
+on_v_grid = (get_dim_name(state_id, ivar, 2) == 'south_north_stag')
+
+end function
+
+!------------------------------------------------------------------
+function on_w_grid(state_id, ivar)
+integer, intent(in) :: state_id, ivar
+logical :: on_w_grid
+
+if (get_num_dims(state_id, ivar) > 2) then
+   on_w_grid = (get_dim_name(state_id, ivar, 3) == 'bottom_top_stag')
+else
+   on_w_grid = .false.
+endif
+
+end function on_w_grid
+!------------------------------------------------------------------
+!------------------------------------------------------------------
+
 
 
 !------------------------------------------------------------------
@@ -552,6 +625,53 @@ endif
 end function variable_is_on_domain
 
 !------------------------------------------------------------------
+subroutine read_grid()
+
+integer :: ncid, i
+character (len=1) :: idom ! assumes <=9
+character(len=*), parameter :: routine = 'read_grid'
+
+integer :: dim_size(3) ! (west_east, south_north, Time)
+
+! This is assuming the unlimited dimension is length 1
+! Should we be reading the latest time slice instead?
+
+do i = 1, num_domains
+
+    write( idom , '(I1)') i
+    ncid = nc_open_file_readonly('wrfinput_d0'//idom, routine)
+
+    call nc_get_variable_size(ncid, 'XLONG', dim_size)
+    allocate(grid(i)%longitude(dim_size(1), dim_size(2)))
+    call nc_get_variable(ncid, 'XLONG', grid(i)%longitude, routine)
+
+    call nc_get_variable_size(ncid, 'XLONG_U', dim_size)
+    allocate(grid(i)%longitude_u(dim_size(1), dim_size(2)))
+    call nc_get_variable(ncid, 'XLONG_U', grid(i)%longitude_u, routine)
+    
+    call nc_get_variable_size(ncid, 'XLONG_V', dim_size)
+    allocate(grid(i)%longitude_v(dim_size(1), dim_size(2)))
+    call nc_get_variable(ncid, 'XLONG_V', grid(i)%longitude_v, routine)
+    
+    call nc_get_variable_size(ncid, 'XLAT', dim_size)
+    allocate(grid(i)%latitude(dim_size(1), dim_size(2)))
+    call nc_get_variable(ncid, 'XLAT', grid(i)%latitude, routine)
+    
+    call nc_get_variable_size(ncid, 'XLAT_U', dim_size)
+    allocate(grid(i)%latitude_u(dim_size(1), dim_size(2)))
+    call nc_get_variable(ncid, 'XLAT_U', grid(i)%latitude_u, routine)
+    
+    call nc_get_variable_size(ncid, 'XLAT_V', dim_size)
+    allocate(grid(i)%latitude_v(dim_size(1), dim_size(2)))
+    call nc_get_variable(ncid, 'XLAT_V', grid(i)%latitude_v, routine)
+
+    call nc_close_file(ncid, routine)
+
+enddo
+
+end subroutine read_grid
+
+!------------------------------------------------------------------
 function compute_geometric_height(geopot, lat)
 
 real(r8), intent(in)  :: geopot
@@ -599,7 +719,24 @@ compute_geometric_height = (termr*geopot) / ( (termg/grav) * termr - geopot )
 end function compute_geometric_height
 
 
+!------------------------------------------------------------------
+! If there are other domains in the state:
+!      wrf domain id =/ state domain id
+function get_wrf_domain(state_id)
 
+integer, intent(in) :: state_id
+integer :: get_wrf_domain
+
+integer :: i
+
+do i = 1, num_domains
+   if (wrf_dom(i) == state_id) then
+      get_wrf_domain = i
+      return
+   endif
+enddo
+
+end function get_wrf_domain
 
 
 
