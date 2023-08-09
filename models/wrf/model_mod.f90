@@ -287,84 +287,6 @@ if(present(qty_out)) qty_out = qty
 
 end subroutine get_state_meta_data
 
-!------------------------------------------------------------------
-function convert_indices_to_lon_lat_lev(i, j, k, var_id, state_id)
-
-integer, intent(in) :: i, j, k, var_id, state_id
-type(location_type) :: convert_indices_to_lon_lat_lev
-
-real(r8) :: long, lat, lev
-integer :: dom_id
-
-dom_id = get_wrf_domain(state_id)
-
-if ( on_u_grid(state_id, var_id) ) then
-   long = grid(dom_id)%longitude_u(i,j)
-   lat = grid(dom_id)%latitude_u(i,j)
-elseif ( on_v_grid(state_id, var_id) ) then
-   long = grid(dom_id)%longitude_v(i,j)
-   lat = grid(dom_id)%latitude_v(i,j)
-else ! on mass grid
-   long = grid(dom_id)%longitude(i,j)
-   lat = grid(dom_id)%latitude(i,j)
-endif
-
-! dart expects longitude [0,360]
-do while (long <   0.0_r8)
-   long = long + 360.0_r8
-end do
-do while (long > 360.0_r8)
-   long = long - 360.0_r8
-end do
-
-
-if ( on_w_grid(state_id, var_id) ) then
-   lev = real(k) - 0.5_r8
-else
-   lev = real(k)
-endif
-
-convert_indices_to_lon_lat_lev = set_location(long,lat,lev, VERTISLEVEL)
-
-end function convert_indices_to_lon_lat_lev
-
-!------------------------------------------------------------------
-! which grid a variable is on.
-!   querying dimension here, could do by qty?
-!------------------------------------------------------------------
-function on_u_grid(state_id, ivar)
-integer, intent(in) :: state_id, ivar
-logical :: on_u_grid
-
-on_u_grid = (get_dim_name(state_id, ivar, 1) == 'west_east_stag')
-
-end function
-
-!------------------------------------------------------------------
-function on_v_grid(state_id, ivar)
-integer, intent(in) :: state_id, ivar
-logical :: on_v_grid
-
-on_v_grid = (get_dim_name(state_id, ivar, 2) == 'south_north_stag')
-
-end function
-
-!------------------------------------------------------------------
-function on_w_grid(state_id, ivar)
-integer, intent(in) :: state_id, ivar
-logical :: on_w_grid
-
-if (get_num_dims(state_id, ivar) > 2) then
-   on_w_grid = (get_dim_name(state_id, ivar, 3) == 'bottom_top_stag')
-else
-   on_w_grid = .false.
-endif
-
-end function on_w_grid
-!------------------------------------------------------------------
-!------------------------------------------------------------------
-
-
 
 !------------------------------------------------------------------
 ! obs have a type and qty
@@ -435,22 +357,6 @@ if (.not. present(dist)) return
 !call calculate_distances()
 
 end subroutine get_close
-
-!------------------------------------------------------------------
-subroutine convert_base_vertical(base_loc, fail)
-
-type(location_type), intent(inout) :: base_loc
-logical, intent(out) :: fail
-
-fail = .true.
-
-end subroutine convert_base_vertical
-!------------------------------------------------------------------
-
-subroutine end_model()
-
-
-end subroutine end_model
 
 
 !------------------------------------------------------------------
@@ -525,6 +431,13 @@ read_model_time = set_date(year, month, day, hour, minute, second)
 call  nc_close_file(ncid, routine)
 
 end function read_model_time
+
+!------------------------------------------------------------------
+
+subroutine end_model()
+
+
+end subroutine end_model
 
 !------------------------------------------------------------------
 !----------------------------------------------------------------------
@@ -738,10 +651,93 @@ enddo
 
 end function get_wrf_domain
 
+!------------------------------------------------------------------
+subroutine convert_base_vertical(base_loc, fail)
+
+type(location_type), intent(inout) :: base_loc
+logical, intent(out) :: fail
+
+fail = .true.
+
+end subroutine convert_base_vertical
+
+!------------------------------------------------------------------
+function convert_indices_to_lon_lat_lev(i, j, k, var_id, state_id)
+
+integer, intent(in) :: i, j, k, var_id, state_id
+type(location_type) :: convert_indices_to_lon_lat_lev
+
+real(r8) :: long, lat, lev
+integer :: dom_id
+
+dom_id = get_wrf_domain(state_id)
+
+if ( on_u_grid(state_id, var_id) ) then
+   long = grid(dom_id)%longitude_u(i,j)
+   lat = grid(dom_id)%latitude_u(i,j)
+elseif ( on_v_grid(state_id, var_id) ) then
+   long = grid(dom_id)%longitude_v(i,j)
+   lat = grid(dom_id)%latitude_v(i,j)
+else ! on mass grid
+   long = grid(dom_id)%longitude(i,j)
+   lat = grid(dom_id)%latitude(i,j)
+endif
+
+! dart expects longitude [0,360]
+do while (long <   0.0_r8)
+   long = long + 360.0_r8
+end do
+do while (long > 360.0_r8)
+   long = long - 360.0_r8
+end do
 
 
-!===================================================================
-! End of model_mod
-!===================================================================
+if ( on_w_grid(state_id, var_id) ) then
+   lev = real(k) - 0.5_r8
+else
+   lev = real(k)
+endif
+
+convert_indices_to_lon_lat_lev = set_location(long,lat,lev, VERTISLEVEL)
+
+end function convert_indices_to_lon_lat_lev
+
+!------------------------------------------------------------------
+! which grid a variable is on.
+!   querying dimension here, could do by qty?
+!------------------------------------------------------------------
+function on_u_grid(state_id, ivar)
+integer, intent(in) :: state_id, ivar
+logical :: on_u_grid
+
+on_u_grid = (get_dim_name(state_id, ivar, 1) == 'west_east_stag')
+
+end function
+
+!------------------------------------------------------------------
+function on_v_grid(state_id, ivar)
+integer, intent(in) :: state_id, ivar
+logical :: on_v_grid
+
+on_v_grid = (get_dim_name(state_id, ivar, 2) == 'south_north_stag')
+
+end function
+
+!------------------------------------------------------------------
+function on_w_grid(state_id, ivar)
+integer, intent(in) :: state_id, ivar
+logical :: on_w_grid
+
+if (get_num_dims(state_id, ivar) > 2) then
+   on_w_grid = (get_dim_name(state_id, ivar, 3) == 'bottom_top_stag')
+else
+   on_w_grid = .false.
+endif
+
+end function on_w_grid
+!------------------------------------------------------------------
+!------------------------------------------------------------------
+
+
 end module model_mod
 
