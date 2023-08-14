@@ -14,7 +14,7 @@ use     location_mod, only : location_type, get_close_type, &
                              set_location, set_location_missing, &
                              set_vertical_localization_coord, &
                              VERTISHEIGHT, VERTISLEVEL, &
-                             loc_get_close => get_close
+                             loc_get_close => get_close, get_location
 
 use    utilities_mod, only : register_module, error_handler, &
                              E_ERR, E_MSG, &
@@ -27,7 +27,8 @@ use netcdf_utilities_mod, only : nc_add_global_attribute, nc_synchronize_file, &
                                  nc_begin_define_mode, nc_end_define_mode, &
                                  NF90_MAX_NAME, nc_get_variable_size, &
                                  nc_get_variable, nc_close_file, nc_check, &
-                                 nc_open_file_readonly, nc_get_variable_size
+                                 nc_open_file_readonly, nc_get_variable_size, &
+                                 nc_get_global_attribute
 
 use state_structure_mod, only : add_domain, get_domain_size, get_model_variable_indices, &
                                 get_dim_name, get_num_dims
@@ -40,6 +41,21 @@ use default_model_mod, only : write_model_time, &
                               init_time => fail_init_time, &
                               init_conditions => fail_init_conditions, &
                               convert_vertical_obs, convert_vertical_state, adv_1step
+
+use         map_utils, only : latlon_to_ij, &
+                              proj_info, &
+                              map_set, &
+                              map_init, &
+                              PROJ_LATLON, &
+                              PROJ_LC, &
+                              PROJ_PS, &
+                              PROJ_PS_WGS84, &
+                              PROJ_MERC, &
+                              PROJ_GAUSS, &
+                              PROJ_CYL, &
+                              PROJ_CASSINI, &
+                              PROJ_ALBERS_NAD83, &
+                              PROJ_ROTLL
 
 use netcdf ! no get_char in netcdf_utilities_mod
 
@@ -106,6 +122,7 @@ logical :: log_horz_interpQ = .false.
 
 
 logical :: allow_perturbed_ics = .false.
+logical, parameter :: restrict_polar = .false.
 !-------------------------------
 
 
@@ -129,6 +146,10 @@ log_horz_interpM, &
 log_horz_interpQ
 
 type grid_ll
+  integer :: map_proj ! MAP_PROJ in wrf netcdf file
+  type(proj_info) :: proj ! wrf map projection structure
+  real(r8) :: dx
+  real(r8) :: truelat1, truelat2, stand_lon
   real(r8), dimension(:,:),   allocatable :: latitude, latitude_u, latitude_v
   real(r8), dimension(:,:),   allocatable :: longitude, longitude_u, longitude_v
 end type grid_ll
@@ -237,6 +258,12 @@ real(r8),           intent(out) :: expected_obs(ens_size) ! array of interpolate
 integer,            intent(out) :: istatus(ens_size)
 
 integer, parameter :: FAILED_BOUNDS_CHECK = 44
+integer, parameter :: CANNOT_INTERPOLATE_QTY = 55
+integer, parameter :: POLAR_RESTRICTED = 10 ! polar observation while restrict_polar = .true.
+integer, parameter :: NOT_IN_ANY_DOMAIN = 11
+real(r8) :: lon_lat_lev(3)
+real(r8) :: xloc, yloc ! WRF i,j in the grid
+integer :: id
 
 if ( .not. module_initialized ) call static_init_model
 
@@ -244,8 +271,24 @@ expected_obs(:) = MISSING_R8
 
 istatus(:) = 1
 
+if (.not. able_to_interpolate_qty() ) then
+   istatus(:) = CANNOT_INTERPOLATE_QTY
+   return
+endif
+
 if ( bounds_check_fail() ) then
    istatus(:) = FAILED_BOUNDS_CHECK
+   return
+endif
+
+
+lon_lat_lev = get_location(location)
+call get_domain_info(lon_lat_lev(1),lon_lat_lev(2),id,xloc,yloc)
+
+print*, 'i,j, id', xloc, yloc, id
+
+if (id == 0) then
+   istatus(:) = NOT_IN_ANY_DOMAIN
    return
 endif
 
@@ -586,7 +629,15 @@ do i = 1, num_domains
     allocate(grid(i)%latitude_v(dim_size(1), dim_size(2)))
     call nc_get_variable(ncid, 'XLAT_V', grid(i)%latitude_v, routine)
 
+    call nc_get_global_attribute(ncid, 'MAP_PROJ', grid(i)%map_proj)
+    call nc_get_global_attribute(ncid, 'DX', grid(i)%dx)
+    call nc_get_global_attribute(ncid, 'TRUELAT1', grid(i)%truelat1)
+    call nc_get_global_attribute(ncid, 'TRUELAT2', grid(i)%truelat2)
+    call nc_get_global_attribute(ncid, 'STAND_LON', grid(i)%stand_lon)
+
     call nc_close_file(ncid, routine)
+
+    call setup_map_projection(i)
 
 enddo
 
@@ -750,11 +801,132 @@ function bounds_check_fail()
 
 logical :: bounds_check_fail
 
-bounds_check_fail = .true.
+bounds_check_fail = .false.
 
 end function bounds_check_fail
+
+!------------------------------------------------------------------
+function able_to_interpolate_qty()
+
+logical :: able_to_interpolate_qty
+
+able_to_interpolate_qty = .true.
+
+end function able_to_interpolate_qty
+
+!------------------------------------------------------------------
+! TODO
+subroutine get_domain_info(obslon,obslat,id,iloc,jloc,domain_id_start)
+
+real(r8), intent(in)           :: obslon, obslat
+integer,  intent(out)          :: id
+real(r8), intent(out)          :: iloc, jloc
+integer,  intent(in), optional :: domain_id_start ! HK this is used in wrf_dart_obs_preprocess.f90
+
+do id = num_domains, 1, -1
+
+print*, 'obslon, obslat', obslon, obslat, min(max(obslat,-89.9999999_r8),89.9999999_r8)
+
+! From module_map_utils.f90
+!       latlon_to_ij(proj, lat, lon, i, j)
+!       ij_to_latlon(proj, i, j, lat, lon)
+!
+!       It is incumbent upon the calling routine to determine whether or
+!       not the values returned are within your domain's bounds.  All values
+!       of i, j, lat, and lon are REAL values.
+
+   call latlon_to_ij(grid(id)%proj,min(max(obslat,-89.9999999_r8),89.9999999_r8),obslon,iloc,jloc)
+
+   if (found_in_domain(iloc,jloc)) return
+
+enddo
+
+! domain not found, id=0
+
+end subroutine get_domain_info
+
+!------------------------------------------------------------------
+pure function found_in_domain(i,j)
+real(r8), intent(in) :: i, j
+logical :: found_in_domain
+
+found_in_domain = .false.
+
+end function found_in_domain
+!------------------------------------------------------------------
+subroutine setup_map_projection(id)
+
+! id:   input, domain id
+
+integer, intent(in)   :: id
+logical, parameter    :: debug = .false.
+
+real(r8) :: latinc,loninc,stdlon
+real(r8) :: truelat1, truelat2
+
+call map_init(grid(id)%proj)
+
+! Populate the map projection structure
+
+!nc -- added in case structures for CASSINI and CYL
+!nc -- global wrfinput_d01 has truelat1 = 1.e20, so we need to change it where needed
+!nc -- for PROJ_LATLON stdlon and truelat1 have different meanings --
+!nc --   stdlon --> loninc  and  truelat1 --> latinc
+!JPH --- this latinc/loninc calculations are only valid for global domains
+
+!if ( wrf%dom(id)%scm ) then
+!! JPH -- set to zero which should cause the map utils to return NaNs if called
+!   latinc = 0.0_r8
+!   loninc = 0.0_r8
+!else
+!   latinc = 180.0_r8/wrf%dom(id)%sn
+!   loninc = 360.0_r8/wrf%dom(id)%we
+!endif
+
+
+latinc = 180.0_r8/size(grid(id)%longitude(:,1)) ! west_east
+loninc = 360.0_r8/size(grid(id)%longitude(1,:)) ! north_south
+
+if(grid(id)%map_proj == PROJ_LATLON) then !HK why are these different to the wrfinput file?
+   truelat1 = latinc
+   stdlon = loninc
+else
+   truelat1 = grid(id)%truelat1
+   truelat2 = grid(id)%truelat2
+   stdlon = grid(id)%stand_lon
+endif
+
+!nc -- specified inputs to hopefully handle ALL map projections -- hopefully map_set will
+!        just ignore the inputs it doesn't need for its map projection of interest (?)
+!
+!   NOTE:: We are NOT yet supporting the Gaussian grid or the Rotated Lat/Lon, so we
+!            are going to skip the entries:  nlon, nlat, ixdim, jydim, stagger, phi, lambda
+!
+!      + Gaussian grid uses nlat & nlon
+!      + Rotated Lat/Lon uses ixdim, jydim, stagger, phi, & lambda
+!
+call map_set( proj_code=grid(id)%map_proj, &
+              proj=grid(id)%proj, &
+              lat1=grid(id)%latitude(1,1), &
+              lon1=grid(id)%longitude(1,1), &
+              lat0=90.0_r8, &
+              lon0=0.0_r8, &
+              knowni=1.0_r8, &
+              knownj=1.0_r8, &
+              dx=grid(id)%dx, &
+              latinc=latinc, &
+              loninc=loninc, &
+              stdlon=stdlon, &
+              truelat1=truelat1, &
+              truelat2=truelat2  )
+
+end subroutine setup_map_projection
+
+
 !------------------------------------------------------------------
 ! Vortex
+
+
 
 
 end module model_mod
