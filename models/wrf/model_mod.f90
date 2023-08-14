@@ -822,7 +822,15 @@ integer,  intent(out)          :: id
 real(r8), intent(out)          :: iloc, jloc
 integer,  intent(in), optional :: domain_id_start ! HK this is used in wrf_dart_obs_preprocess.f90
 
-do id = num_domains, 1, -1
+integer :: n ! domain to start from
+
+if (present(domain_id_start)) then
+  n = domain_id_start
+else
+  n = num_domains
+endif
+
+do id = n, 1, -1
 
 print*, 'obslon, obslat', obslon, obslat, min(max(obslat,-89.9999999_r8),89.9999999_r8)
 
@@ -840,7 +848,8 @@ print*, 'obslon, obslat', obslon, obslat, min(max(obslat,-89.9999999_r8),89.9999
 
 enddo
 
-! domain not found, id=0
+! domain not found
+id=0
 
 end subroutine get_domain_info
 
