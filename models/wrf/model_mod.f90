@@ -276,12 +276,6 @@ if (.not. able_to_interpolate_qty() ) then
    return
 endif
 
-if ( bounds_check_fail() ) then
-   istatus(:) = FAILED_BOUNDS_CHECK
-   return
-endif
-
-
 lon_lat_lev = get_location(location)
 call get_domain_info(lon_lat_lev(1),lon_lat_lev(2),id,xloc,yloc)
 
@@ -289,6 +283,11 @@ print*, 'i,j, id', xloc, yloc, id
 
 if (id == 0) then
    istatus(:) = NOT_IN_ANY_DOMAIN
+   return
+endif
+
+if ( bounds_check_fail() ) then
+   istatus(:) = FAILED_BOUNDS_CHECK
    return
 endif
 
