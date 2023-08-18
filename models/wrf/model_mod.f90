@@ -5,7 +5,8 @@
 
 module model_mod
 
-use        types_mod, only : r8, i8, MISSING_R8, digits12
+use        types_mod, only : r8, i8, MISSING_R8, digits12, &
+                             gas_constant, gas_constant_v, ps0
 
 use time_manager_mod, only : time_type, set_time, GREGORIAN, set_date, &
                              set_calendar_type
@@ -13,8 +14,10 @@ use time_manager_mod, only : time_type, set_time, GREGORIAN, set_date, &
 use     location_mod, only : location_type, get_close_type, &
                              set_location, set_location_missing, &
                              set_vertical_localization_coord, &
-                             VERTISHEIGHT, VERTISLEVEL, &
-                             loc_get_close => get_close, get_location
+                             VERTISHEIGHT, VERTISLEVEL, VERTISPRESSURE, &
+                             VERTISSURFACE, VERTISUNDEF, &
+                             loc_get_close => get_close, get_location, &
+                             query_location
 
 use    utilities_mod, only : register_module, error_handler, &
                              E_ERR, E_MSG, &
@@ -28,13 +31,13 @@ use netcdf_utilities_mod, only : nc_add_global_attribute, nc_synchronize_file, &
                                  NF90_MAX_NAME, nc_get_variable_size, &
                                  nc_get_variable, nc_close_file, nc_check, &
                                  nc_open_file_readonly, nc_get_variable_size, &
-                                 nc_get_global_attribute
+                                 nc_get_global_attribute, nc_get_dimension_size
 
 use state_structure_mod, only : add_domain, get_domain_size, get_model_variable_indices, &
                                 get_dim_name, get_num_dims, get_dart_vector_index, &
-                                get_varid_from_kind
+                                get_varid_from_kind, get_varid_from_varname
 
-use distributed_state_mod, only : get_state_array
+use distributed_state_mod, only : get_state_array, get_state
 
 use obs_kind_mod, only : get_index_for_quantity, &
                          QTY_U_WIND_COMPONENT, &
@@ -46,7 +49,10 @@ use obs_kind_mod, only : get_index_for_quantity, &
                          QTY_PRESSURE, &
                          QTY_SURFACE_TYPE, &
                          QTY_SURFACE_ELEVATION, &
-                         QTY_LANDMASK
+                         QTY_LANDMASK, &
+                         QTY_SURFACE_PRESSURE, &
+                         QTY_VAPOR_MIXING_RATIO, &
+                         QTY_TEMPERATURE
 
 use ensemble_manager_mod, only : ensemble_type
 
@@ -130,7 +136,7 @@ logical :: allow_obs_below_vol = .false.
 
 ! Do the interpolation of pressure values only after taking the log (.true.)
 ! vs doing a linear interpolation directly in pressure units (.false.)
-logical :: lallow_obs_below_vol = .true.
+logical :: log_vert_interp  = .true.
 logical :: log_horz_interpM = .false.
 logical :: log_horz_interpQ = .false.
 
@@ -139,10 +145,12 @@ logical :: polar = .false.
 logical :: periodic_x = .false.
 logical :: periodic_y = .false.
 
+logical :: allow_perturbed_ics = .false.
+
 !-------------------------------
 
-logical :: allow_perturbed_ics = .false.
 logical, parameter :: restrict_polar = .false. !HK what is this for?
+real(r8), parameter :: ts0 = 300.0_r8        ! Base potential temperature for all levels.
 
 
 namelist /model_nml/ &
@@ -172,6 +180,7 @@ type grid_ll
   real(r8), dimension(:,:),   allocatable :: latitude, latitude_u, latitude_v
   real(r8), dimension(:,:),   allocatable :: longitude, longitude_u, longitude_v
   integer :: we, sn ! west-east, south-north number of grid points
+  integer :: bt ! bottom-top number of grid points
 end type grid_ll
 
 ! need grid for each domain
@@ -180,6 +189,9 @@ type(grid_ll), allocatable :: grid(:)
 integer(i8) :: model_size
 
 
+! Physical constants
+real (kind=r8), PARAMETER    :: rd_over_rv = gas_constant / gas_constant_v
+real (kind=r8), PARAMETER    :: cpovcv = 1.4_r8        ! cp / (cp - gas_constant)
 
 contains
 
@@ -281,15 +293,16 @@ integer, parameter :: FAILED_BOUNDS_CHECK = 44
 integer, parameter :: CANNOT_INTERPOLATE_QTY = 55
 integer, parameter :: POLAR_RESTRICTED = 10 ! polar observation while restrict_polar = .true.
 integer, parameter :: NOT_IN_ANY_DOMAIN = 11
-real(r8) :: lon_lat_lev(3)
+real(r8) :: lon_lat_vert(3)
 real(r8) :: xloc, yloc ! WRF i,j in the grid
 integer  :: i, j ! grid
 real(r8) :: dx, dxm, dy, dym ! grid fractions
 integer :: ll(2), ul(2), lr(2), ur(2) !(x,y) of four corners
 integer :: rc ! return code getCorners
 integer :: id
-integer :: k(ens_size)     ! level
-real(r8) :: zloc(ens_size)
+integer :: k(ens_size)      ! level
+integer :: which_vert       ! vertical coordinate of the observation
+real(r8) :: zloc(ens_size)  ! vertical location of the obs for each ens member
 real(r8) :: fld_k(ens_size), fld_k_plus_1(ens_size) ! value at level k and k+1
 
 if ( .not. module_initialized ) call static_init_model
@@ -298,8 +311,9 @@ expected_obs(:) = MISSING_R8
 
 istatus(:) = 1
 
-lon_lat_lev = get_location(location)
-call get_domain_info(lon_lat_lev(1),lon_lat_lev(2),id,xloc,yloc)
+which_vert = nint(query_location(location))
+lon_lat_vert = get_location(location)
+call get_domain_info(lon_lat_vert(1),lon_lat_vert(2),id,xloc,yloc) ! mass points
 
 print*, 'i,j, id', xloc, yloc, id
 
@@ -319,14 +333,16 @@ if ( bounds_check_fail() ) then
    return
 endif
 
-! vertical location
-call get_bounding_levels()
-!    surface obs only 1 level
-
 ! horizontal location
 call toGrid(xloc,i,dx,dxm)
 call toGrid(yloc,j,dy,dym)
-call getCorners(i, j, id, qty, ll, ul, lr, ur, rc )
+call getCorners(i, j, id, qty, ll, ul, lr, ur, rc)
+
+
+
+! vertical location
+call get_bounding_levels(which_vert, id, lon_lat_vert, ens_size, state_handle, ll, ul, lr, ur, dx, dy, dxm, dym, k, zloc)
+!    surface obs only 1 level
 
 fld_k(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dy) ! level k
 fld_k_plus_1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dy) ! level k+1
@@ -354,14 +370,17 @@ integer :: e ! loop variable
 ! lower left, upper left, lower right, upper right
 integer(i8), dimension(ens_size)  :: ill, iul, ilr, iur  ! dart index at four corners
 real(r8),    dimension(ens_size)  :: x_ill, x_iul, x_ilr, x_iur ! state value at four corners
+integer :: var_id
 
+
+var_id = get_varid_from_kind(wrf_dom(id), qty)
 
 do e = 1, ens_size
-                              !   x,     y,     z
-   ill(e) = get_dart_vector_index(ll(1), ll(2), k(e), wrf_dom(id), qty)
-   iul(e) = get_dart_vector_index(ul(1), ul(2), k(e), wrf_dom(id), qty)
-   ilr(e) = get_dart_vector_index(lr(1), lr(2), k(e), wrf_dom(id), qty)
-   iur(e) = get_dart_vector_index(ur(1), ur(2), k(e), wrf_dom(id), qty)
+                              !   x,     y,     z,    domain,      variable
+   ill(e) = get_dart_vector_index(ll(1), ll(2), k(e), wrf_dom(id), var_id)
+   iul(e) = get_dart_vector_index(ul(1), ul(2), k(e), wrf_dom(id), var_id)
+   ilr(e) = get_dart_vector_index(lr(1), lr(2), k(e), wrf_dom(id), var_id)
+   iur(e) = get_dart_vector_index(ur(1), ur(2), k(e), wrf_dom(id), var_id)
 
 enddo
 
@@ -744,6 +763,8 @@ do i = 1, num_domains
     call nc_get_global_attribute(ncid, 'TRUELAT1', grid(i)%truelat1)
     call nc_get_global_attribute(ncid, 'TRUELAT2', grid(i)%truelat2)
     call nc_get_global_attribute(ncid, 'STAND_LON', grid(i)%stand_lon)
+  
+    grid(i)%bt = nc_get_dimension_size(ncid, 'bottom_top', routine)
 
     call nc_close_file(ncid, routine)
 
@@ -801,12 +822,322 @@ compute_geometric_height = (termr*geopot) / ( (termg/grav) * termr - geopot )
 end function compute_geometric_height
 
 !------------------------------------------------------------------
-subroutine get_bounding_levels()
+! should this be get lower level?
+subroutine get_bounding_levels(which_vert, id, lon_lat_vert, ens_size, state_handle, &
+                               ll, ul, lr, ur, dx, dy, dxm, dym, &
+                               level_below, zloc)
+
+integer,  intent(in)  :: which_vert
+integer,  intent(in)  :: id
+real(r8), intent(in)  :: lon_lat_vert(3)
+integer,  intent(in)  :: ens_size
+type(ensemble_type), intent(in) :: state_handle
+integer, dimension(2), intent(in) :: ll, ul, lr, ur ! (x,y) of each corner
+real(r8), intent(in)  :: dx, dxm, dy, dym ! grid fractions to obs
+integer,  intent(out) :: level_below(ens_size)
+real(r8), intent(out) :: zloc(ens_size) ! vertical location of the obs for each ens member
+
+integer :: e ! loop variable
+real(r8) :: v_p(grid(id)%bt,ens_size)
+logical :: lev0
+
+select case (which_vert)
+   case(VERTISLEVEL)
+      zloc(:) = lon_lat_vert(3)
+   case(VERTISPRESSURE)
+      call get_model_pressure_profile(id, ll, ul, lr, ur, dx, dy, dxm, dym, ens_size, state_handle, v_p)
+      do e = 1, ens_size
+         call pres_to_zk(lon_lat_vert(3), v_p(:,e), grid(id)%bt, zloc(e), lev0)
+         if (lev0) then
+            print*, "obs below lowest sigma"
+         endif
+      enddo
+   case(VERTISHEIGHT)
+      !call get_model_height_profile()
+      !call height_to_zk()
+   case(VERTISSURFACE)
+       print*, "Surface"
+   case(VERTISUNDEF)
+       zloc = 0.0_r8
+end select
 
 print*, 'not done bounding levels'
 
-
 end subroutine get_bounding_levels
+
+!------------------------------------------------------------------
+! horizontal same across the ensemble
+subroutine get_model_pressure_profile(id, ll, ul, lr, ur, dx, dy, dxm, dym, &
+                                      ens_size, state_handle, v_p)
+
+integer,  intent(in)  :: id
+integer, dimension(2), intent(in)  :: ll, ul, lr, ur ! (x,y) mass grid corners
+real(r8), intent(in)  :: dx, dy, dxm, dym
+integer, intent(in)   :: ens_size
+type(ensemble_type), intent(in)  :: state_handle
+real(r8), intent(out) :: v_p(0:grid(id)%bt, ens_size)
+
+integer(i8)           :: ill, ilr, iul, iur
+real(r8), dimension(ens_size) :: x_ill, x_ilr, x_iul, x_iur
+real(r8), dimension(ens_size) :: pres1, pres2, pres3, pres4
+real(r8), dimension(ens_size) :: lev2_pres1, lev2_pres2, lev2_pres3, lev2_pres4
+
+integer :: var_id
+integer :: k
+
+do k=1, grid(id)%bt ! number of mass levels
+
+   pres1 = model_pressure_t(ll(1), ll(2), k, id, state_handle, ens_size)
+   pres2 = model_pressure_t(lr(1), lr(2), k, id, state_handle, ens_size)
+   pres3 = model_pressure_t(ul(1), ul(2), k, id, state_handle, ens_size)
+   pres4 = model_pressure_t(ur(1), ur(2), k, id, state_handle, ens_size)
+
+   v_p(k, :) = interp_4pressure(pres1, pres2, pres3, pres4, dx, dxm, dy, dym, ens_size)
+
+   if (k == 2) then ! store result for extrapolation
+     lev2_pres1(:) = pres1(:)
+     lev2_pres2(:) = pres2(:)
+     lev2_pres3(:) = pres3(:)
+     lev2_pres4(:) = pres4(:)
+   endif
+
+enddo
+
+var_id = get_varid_from_kind(wrf_dom(id), QTY_SURFACE_PRESSURE)
+
+if (var_id > 0) then ! surface pressure in domain so get v_p(0,:) from surface pressure
+
+   ill = get_dart_vector_index(ll(1), ll(2), 1, wrf_dom(id), var_id)
+   ilr = get_dart_vector_index(lr(1), lr(2), 1, wrf_dom(id), var_id)
+   iul = get_dart_vector_index(ul(1), ul(2), 1, wrf_dom(id), var_id)
+   iur = get_dart_vector_index(ur(1), ur(2), 1, wrf_dom(id), var_id)
+
+   x_ill = get_state(ill, state_handle)
+   x_ilr = get_state(ilr, state_handle)
+   x_iul = get_state(iul, state_handle)
+   x_iur = get_state(iur, state_handle)
+
+   v_p(0,:) = interp_4pressure(x_ill, x_ilr, x_iul, x_iur, dx, dxm, dy, dym, ens_size)
+
+!!! Old code: has a check for 0.0 surface pressure
+!!! https://github.com/NCAR/DART/blob/9729d784226295a197ca3bf00c917e4aaab5003b/models/wrf/model_mod.f90#L4600-L4606
+
+else !extrapolate v_p(0:,) from pressure level 2 and v_p(1:,:)
+
+  v_p(0,:) = interp_4pressure(lev2_pres1(:), lev2_pres2(:), lev2_pres3(:), lev2_pres4(:), dx, dxm, dy, dym, ens_size, &
+                                       extrapolate=.true., edgep=v_p(1,:))
+
+ endif
+
+end subroutine get_model_pressure_profile
+
+!------------------------------------------------------------------
+! returns pressure at a point on the mass grid
+function model_pressure_t(i,j,k,id,state_handle, ens_size)
+
+integer,             intent(in) :: ens_size
+integer,             intent(in) :: i,j,k,id
+type(ensemble_type), intent(in) :: state_handle
+real(r8) :: model_pressure_t(ens_size)
+
+real (kind=r8), PARAMETER    :: rd_over_rv = gas_constant / gas_constant_v
+real (kind=r8), PARAMETER    :: cpovcv = 1.4_r8        ! cp / (cp - gas_constant)
+
+integer(i8) :: iqv !< I think this is i for index
+integer(i8) :: it !< change to array
+real(r8) :: qvf1(ens_size),rho(ens_size), x_iqv(ens_size), x_it(ens_size)
+
+integer :: var_id
+
+model_pressure_t = missing_r8
+
+! Adapted the code from WRF module_big_step_utilities_em.F ----
+!         subroutine calc_p_rho_phi      Y.-R. Guo (10/20/2004)
+
+! Simplification: alb*mub = (phb(i,j,k+1) - phb(i,j,k))/dnw(k)
+
+var_id = get_varid_from_kind(wrf_dom(id), QTY_VAPOR_MIXING_RATIO)
+iqv = get_dart_vector_index(i,j,k, wrf_dom(id), var_id)
+
+var_id = get_varid_from_kind(wrf_dom(id), QTY_TEMPERATURE)
+it  = get_dart_vector_index(i,j,k, wrf_dom(id), var_id)
+
+x_iqv = get_state(iqv, state_handle)
+x_it  = get_state(it, state_handle)
+
+qvf1(:) = 1.0_r8 + x_iqv(:) / rd_over_rv
+
+rho(:) = model_rho_t(i,j,k,id,state_handle, ens_size)
+
+model_pressure_t(:) = ps0 * ( (gas_constant*(ts0+x_it)*qvf1) / &
+     (ps0/rho(:)) )**cpovcv
+
+end function model_pressure_t
+
+!------------------------------------------------------------------
+subroutine pres_to_zk(pres, mdl_v, n3, zk, lev0)
+
+! Calculate the model level "zk" on half (mass) levels,
+! corresponding to pressure "pres"
+
+real(r8), intent(in)  :: pres
+real(r8), intent(in)  :: mdl_v(0:n3)
+integer,  intent(in)  :: n3
+real(r8), intent(out) :: zk
+logical,  intent(out) :: lev0
+
+integer  :: k
+
+lev0 = .false.
+
+! if out of range completely, return missing_r8 and lev0 false
+if (pres > mdl_v(0) .or. pres < mdl_v(n3)) return
+
+! if above surface but below lowest sigma level, return the
+! sigma value but set lev0 true
+if(pres <= mdl_v(0) .and. pres > mdl_v(1)) then
+  lev0 = .true.
+  if (log_vert_interp) then
+     zk = (log(mdl_v(0)) - log(pres))/(log(mdl_v(0)) - log(mdl_v(1)))
+  else
+  zk = (mdl_v(0) - pres)/(mdl_v(0) - mdl_v(1))
+  endif
+  return
+ endif
+
+! find the 2 sigma levels the value is between and return that
+! as a real number, including the fraction between the levels.
+do k = 1,n3-1
+   if(pres <= mdl_v(k) .and. pres >= mdl_v(k+1)) then
+      if (log_vert_interp) then
+         zk = real(k) + (log(mdl_v(k)) - log(pres))/(log(mdl_v(k)) - log(mdl_v(k+1)))
+      else
+      zk = real(k) + (mdl_v(k) - pres)/(mdl_v(k) - mdl_v(k+1))
+      endif
+      exit
+   endif
+enddo
+
+end subroutine pres_to_zk
+
+
+
+!------------------------------------------------------------------
+
+function interp_4pressure(p1, p2, p3, p4, dx, dxm, dy, dym, ens_size, extrapolate, edgep)
+ 
+! given 4 corners of a quad, where the p1, p2, p3 and p4 points are
+! respectively:  lower left, lower right, upper left, upper right
+! and dx is the distance in x, dxm is 1.0-dx, dy is distance in y
+! and dym is 1.0-dy, interpolate the pressure while converted to log.
+! if extrapolate is true, extrapolate where edgep is the edge pressure
+! and the 4 points and dx/dy give the location of the inner point.
+
+integer, intent(in)                :: ens_size
+real(r8), intent(in)               :: p1(ens_size), p2(ens_size), p3(ens_size), p4(ens_size)
+real(r8), intent(in)               :: dx, dxm, dy, dym
+logical,  intent(in), optional     :: extrapolate
+real(r8), intent(in), optional     :: edgep(ens_size)
+real(r8)                           :: interp_4pressure(ens_size)
+
+logical  :: do_interp
+real(r8) :: intermediate(ens_size)
+real(r8) :: l1(ens_size), l2(ens_size), l3(ens_size), l4(ens_size)
+
+integer :: i
+
+! default is to do interpolation; only extrapolate if the optional
+! arg is specified and if it is true.  for extrapolation 'edgep' is
+! required; it is unused for interpolation.
+do_interp = .true.
+if (present(extrapolate)) then
+   if (extrapolate) do_interp = .false.
+endif
+
+! TODO split this routine into two, interpolate and extrapolate
+if (.not. do_interp .and. .not. present(edgep)) then
+  call error_handler(E_ERR, 'interp_4pressure:', &
+      'edgep must be specified for extrapolation.  internal error.')
+endif
+
+if (log_horz_interpQ) then
+   l1 = log(p1)
+   l2 = log(p2)
+   l3 = log(p3)
+   l4 = log(p4)
+endif
+
+
+! once we like the results, remove the log_horz_interpQ test.
+if (do_interp) then
+   if (log_horz_interpQ) then
+      interp_4pressure = exp(dym*( dxm*l1 + dx*l2 ) + dy*( dxm*l3 + dx*l4 ))
+   else
+      interp_4pressure = dym*( dxm*p1 + dx*p2 ) + dy*( dxm*p3 + dx*p4 )
+   endif
+else
+   if (log_horz_interpQ) then
+      intermediate = (3.0_r8*log(edgep) - &
+                 dym*( dxm*l1 + dx*l2 ) - dy*( dxm*l3 + dx*l4 ))/2.0_r8
+
+      do i = 1, size(intermediate)
+         if (intermediate(i) <= 0.0_r8) then
+            interp_4pressure(i) = edgep(i)
+         else
+            interp_4pressure(i) = exp(intermediate(i))
+         endif
+      enddo
+   else
+      interp_4pressure = (3.0_r8*edgep - &
+                 dym*( dxm*p1 + dx*p2 ) - dy*( dxm*p3 + dx*p4 ))/2.0_r8
+   endif
+endif
+
+end function interp_4pressure
+
+
+!------------------------------------------------------------------
+function model_rho_t(i,j,k,id,state_handle, ens_size)
+
+! Calculate the total density on mass point (half (mass) levels, T-point).
+
+integer,             intent(in)  :: ens_size
+integer,             intent(in)  :: i,j,k,id
+type(ensemble_type), intent(in)  :: state_handle
+real(r8) :: model_rho_t(ens_size)
+
+integer(i8) :: imu,iph,iphp1
+real(r8)    :: ph_e(ens_size), x_imu(ens_size), x_iph(ens_size), x_iphp1(ens_size)
+integer :: var_id
+
+
+! Adapted the code from WRF module_big_step_utilities_em.F ----
+!         subroutine calc_p_rho_phi      Y.-R. Guo (10/20/2004)
+
+! Simplification: alb*mub = (phb(i,j,k+1) - phb(i,j,k))/dnw(k)
+
+var_id = get_varid_from_varname(wrf_dom(id), 'MU')
+imu   = get_dart_vector_index(i,j,1, wrf_dom(id), var_id)
+
+var_id = get_varid_from_kind(wrf_dom(id), QTY_GEOPOTENTIAL_HEIGHT)
+iph   = get_dart_vector_index(i,j,k, wrf_dom(id), var_id)
+iphp1 = get_dart_vector_index(i,j,k+1, wrf_dom(id), QTY_GEOPOTENTIAL_HEIGHT)
+
+x_imu = get_state(imu, state_handle)
+x_iph = get_state(iph, state_handle)
+x_iphp1 = get_state(iphp1, state_handle)
+
+
+print*, "NEED PHB"
+!!ph_e = ( (x_iphp1 + wrf%dom(id)%phb(i,j,k+1)) &
+!!       - (x_iph   + wrf%dom(id)%phb(i,j,k  )) ) / wrf%dom(id)%dnw(k)
+
+!! now calculate rho = - mu / dphi/deta
+
+!!model_rho_t(:) = - (wrf%dom(id)%mub(i,j)+x_imu) / ph_e
+model_rho_t(:) = 1
+
+end function model_rho_t
 
 !------------------------------------------------------------------
 ! If there are other domains in the state:
@@ -990,7 +1321,7 @@ endif
 end function qty_in_domain
 
 !------------------------------------------------------------------
-! TODO
+!  returns closest domain id and horizontal mass point grid points (iloc,jloc)
 subroutine get_domain_info(obslon,obslat,id,iloc,jloc,domain_id_start)
 
 real(r8), intent(in)           :: obslon, obslat
@@ -1095,7 +1426,7 @@ endif
 end function found_in_domain
 
 !------------------------------------------------------------------
-
+! This is mass grid corners
 subroutine getCorners(i, j, id, qty, ll, ul, lr, ur, rc)
 
 integer, intent(in)  :: i, j, id, qty
