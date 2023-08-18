@@ -6,7 +6,7 @@
 module model_mod
 
 use        types_mod, only : r8, i8, MISSING_R8, digits12, &
-                             gas_constant, gas_constant_v, ps0
+                             gas_constant, gas_constant_v, ps0, gravity
 
 use time_manager_mod, only : time_type, set_time, GREGORIAN, set_date, &
                              set_calendar_type
@@ -181,10 +181,20 @@ type grid_ll
   real(r8), dimension(:,:),   allocatable :: longitude, longitude_u, longitude_v
   integer :: we, sn ! west-east, south-north number of grid points
   integer :: bt ! bottom-top number of grid points
+  integer :: bt_stag
+
 end type grid_ll
+
+type static_data
+   real(r8), allocatable :: phb(:,:,:) ! base-state geopotential
+   real(r8), allocatable :: mub(:,:)   ! base state dry air mass in column
+   real(r8), allocatable :: hgt(:,:)   ! Terrain Height
+   real(r8), allocatable :: dnw(:)     ! d(eta) values between full (w) level
+end type static_data
 
 ! need grid for each domain
 type(grid_ll), allocatable :: grid(:)
+type(static_data), allocatable :: stat_dat(:)
 
 integer(i8) :: model_size
 
@@ -232,7 +242,7 @@ print*, 'FAKE model_dt', model_dt
 assim_dt = (assimilation_period_seconds / model_dt) * model_dt
 assimilation_time_step = set_time(assim_dt)
 
-allocate(wrf_dom(num_domains), grid(num_domains))
+allocate(wrf_dom(num_domains), grid(num_domains), stat_dat(num_domains))
 
 call verify_state_variables(nfields, varname, state_qty, update_var, in_domain)
 
@@ -257,6 +267,7 @@ do i = 1, num_domains
 enddo
 
 call read_grid()
+call read_static_data()
 
 call set_vertical_localization_coord(vert_localization_coord)
  
@@ -765,6 +776,7 @@ do i = 1, num_domains
     call nc_get_global_attribute(ncid, 'STAND_LON', grid(i)%stand_lon)
   
     grid(i)%bt = nc_get_dimension_size(ncid, 'bottom_top', routine)
+    grid(i)%bt_stag = nc_get_dimension_size(ncid, 'bottom_top_stag', routine)
 
     call nc_close_file(ncid, routine)
 
@@ -773,6 +785,42 @@ do i = 1, num_domains
 enddo
 
 end subroutine read_grid
+
+!------------------------------------------------------------------
+subroutine read_static_data()
+
+integer :: ncid, i
+character (len=1) :: idom ! assumes <=9
+character(len=*), parameter :: routine = 'read_static_data'
+
+integer :: dim_size(4) ! (west_east, south_north, bottom_top{_stag}, Time)
+
+do i = 1, num_domains
+
+   write( idom , '(I1)') i
+   ncid = nc_open_file_readonly('wrfinput_d0'//idom, routine)
+
+   call nc_get_variable_size(ncid, 'PHB', dim_size)
+   allocate(stat_dat(i)%phb(dim_size(1), dim_size(2), dim_size(3)))
+   call nc_get_variable(ncid, 'PHB', stat_dat(i)%phb, routine)
+ 
+   call nc_get_variable_size(ncid, 'MUB', dim_size)
+   allocate(stat_dat(i)%mub(dim_size(1), dim_size(2)))
+   call nc_get_variable(ncid, 'MUB', stat_dat(i)%mub, routine)
+
+   call nc_get_variable_size(ncid, 'HGT', dim_size)
+   allocate(stat_dat(i)%hgt(dim_size(1), dim_size(2)))
+   call nc_get_variable(ncid, 'HGT', stat_dat(i)%hgt, routine)
+
+   call nc_get_variable_size(ncid, 'DNW', dim_size)
+   allocate(stat_dat(i)%dnw(dim_size(1)))
+   call nc_get_variable(ncid, 'DNW', stat_dat(i)%dnw, routine)
+
+   call nc_close_file(ncid, routine)
+
+end do
+
+end subroutine read_static_data
 
 !------------------------------------------------------------------
 pure function compute_geometric_height(geopot, lat)
@@ -839,6 +887,7 @@ real(r8), intent(out) :: zloc(ens_size) ! vertical location of the obs for each 
 
 integer :: e ! loop variable
 real(r8) :: v_p(grid(id)%bt,ens_size)
+real(r8) :: v_h(grid(id)%bt,ens_size)
 logical :: lev0
 
 select case (which_vert)
@@ -849,14 +898,20 @@ select case (which_vert)
       do e = 1, ens_size
          call pres_to_zk(lon_lat_vert(3), v_p(:,e), grid(id)%bt, zloc(e), lev0)
          if (lev0) then
-            print*, "obs below lowest sigma"
+            print*, "pressure obs below lowest sigma"
          endif
       enddo
    case(VERTISHEIGHT)
-      !call get_model_height_profile()
-      !call height_to_zk()
+      call get_model_height_profile(ll, ul, lr, ur, dx, dy, dxm, dym, id, v_h, state_handle, ens_size)
+      do e = 1, ens_size
+         call height_to_zk(lon_lat_vert(3), v_h(:, e), grid(id)%bt, zloc(e), lev0)
+         if (lev0) then
+            print*, "height obs below lowest sigma"
+         endif
+      enddo
    case(VERTISSURFACE)
-       print*, "Surface"
+       zloc(:) = 1.0_r8
+       ! call check to see if the station height is too far away from the model surface height
    case(VERTISUNDEF)
        zloc = 0.0_r8
 end select
@@ -1020,7 +1075,111 @@ enddo
 
 end subroutine pres_to_zk
 
+!------------------------------------------------------------------
 
+subroutine get_model_height_profile(ll, ul, lr, ur, dx, dy, dxm, dym, id, v_h, state_handle, ens_size)
+
+
+! Calculate the model height profile on half (mass) levels,
+! horizontally interpolated at the observation location.
+
+integer, dimension(2), intent(in)  :: ll, ul, lr, ur ! (x,y) mass grid corners
+integer,  intent(in)  :: id
+real(r8), intent(in)  :: dx,dy,dxm,dym
+integer,  intent(in)  :: ens_size
+real(r8), intent(out) :: v_h(0:grid(id)%bt, ens_size)
+type(ensemble_type), intent(in)  :: state_handle
+integer e !< for ensemble loop
+
+real(r8)              :: fll(grid(id)%bt_stag, ens_size), geop(ens_size), lat(ens_size)
+integer(i8)           :: ill, iul, ilr, iur
+integer               :: k, rc
+
+real(r8), dimension(ens_size) :: x_ill, x_ilr, x_iul, x_iur
+integer :: var_id
+
+var_id = get_varid_from_kind(wrf_dom(id), QTY_GEOPOTENTIAL_HEIGHT)
+
+do k = 1, grid(id)%bt_stag  ! geopotential height (PH) is on bottom_top_stag
+
+   ill = get_dart_vector_index(ll(1), ll(2), k, wrf_dom(id), var_id)
+   iul = get_dart_vector_index(ul(1), ul(2), k, wrf_dom(id), var_id)
+   ilr = get_dart_vector_index(lr(1), lr(2), k, wrf_dom(id), var_id)
+   iur = get_dart_vector_index(ur(1), ur(2), k, wrf_dom(id), var_id)
+
+   x_ill = get_state(ill, state_handle)
+   x_ilr = get_state(ilr, state_handle)
+   x_iul = get_state(iul, state_handle)
+   x_iur = get_state(iur, state_handle)
+
+   geop(:) = ( dym*( dxm*( stat_dat(id)%phb(ll(1),ll(2),k) + x_ill ) + &
+                   dx*( stat_dat(id)%phb(lr(1),lr(2),k) + x_ilr ) ) + &
+             dy*( dxm*( stat_dat(id)%phb(ul(1),ul(2),k) + x_iul ) + &
+                   dx*( stat_dat(id)%phb(ur(1),ur(2),k) + x_iur ) ) )/gravity
+
+   lat(:) = ( grid(id)%latitude(ll(1),ll(2)) + &
+              grid(id)%latitude(lr(1),lr(2)) + &
+              grid(id)%latitude(ul(1),ul(2)) + &
+              grid(id)%latitude(ur(1),ur(2)) ) / 4.0_r8
+
+
+end do
+
+do k = 1, grid(id)%bt
+   do e = 1, ens_size
+      fll(k, e) = compute_geometric_height(geop(e), lat(e))
+   enddo
+   v_h(k, :) = 0.5_r8*(fll(k, :) + fll(k+1, :) )
+end do
+
+v_h(0, :) = dym*( dxm*stat_dat(id)%hgt(ll(1), ll(2)) + &
+                dx*stat_dat(id)%hgt(lr(1), lr(2)) ) + &
+          dy*( dxm*stat_dat(id)%hgt(ul(1), ul(2)) + &
+                dx*stat_dat(id)%hgt(ur(1), ur(2)) )
+
+ 
+
+end subroutine get_model_height_profile
+
+!------------------------------------------------------------------
+
+subroutine height_to_zk(obs_v, mdl_v, n3, zk, lev0)
+
+! Calculate the model level "zk" on half (mass) levels,
+! corresponding to height "obs_v".
+
+real(r8), intent(in)  :: obs_v
+integer,  intent(in)  :: n3
+real(r8), intent(in)  :: mdl_v(0:n3)
+real(r8), intent(out) :: zk
+logical,  intent(out) :: lev0
+
+integer   :: k
+
+zk = missing_r8
+lev0 = .false.
+
+! if out of range completely, return missing_r8 and lev0 false
+if (obs_v < mdl_v(0) .or. obs_v > mdl_v(n3)) return
+
+! if above surface but below lowest 3-d height level, return the
+! height value but set lev0 true
+if(obs_v >= mdl_v(0) .and. obs_v < mdl_v(1)) then
+  lev0 = .true.
+  zk = (mdl_v(0) - obs_v)/(mdl_v(0) - mdl_v(1))
+  return
+endif
+
+! find the 2 height levels the value is between and return that
+! as a real number, including the fraction between the levels.
+do k = 1,n3-1
+   if(obs_v >= mdl_v(k) .and. obs_v <= mdl_v(k+1)) then
+      zk = real(k) + (mdl_v(k) - obs_v)/(mdl_v(k) - mdl_v(k+1))
+      exit
+   endif
+enddo
+
+end subroutine height_to_zk
 
 !------------------------------------------------------------------
 
@@ -1128,14 +1287,12 @@ x_iph = get_state(iph, state_handle)
 x_iphp1 = get_state(iphp1, state_handle)
 
 
-print*, "NEED PHB"
-!!ph_e = ( (x_iphp1 + wrf%dom(id)%phb(i,j,k+1)) &
-!!       - (x_iph   + wrf%dom(id)%phb(i,j,k  )) ) / wrf%dom(id)%dnw(k)
+ph_e = ( (x_iphp1 + stat_dat(id)%phb(i,j,k+1)) &
+       - (x_iph   + stat_dat(id)%phb(i,j,k  )) ) / stat_dat(id)%dnw(k)
 
 !! now calculate rho = - mu / dphi/deta
 
-!!model_rho_t(:) = - (wrf%dom(id)%mub(i,j)+x_imu) / ph_e
-model_rho_t(:) = 1
+model_rho_t(:) = - (stat_dat(id)%mub(i,j)+x_imu) / ph_e
 
 end function model_rho_t
 
@@ -1309,8 +1466,6 @@ logical :: qty_in_domain
 integer :: varid
 
 varid = get_varid_from_kind(wrf_dom(id), qty)
-
-print*, 'varid', varid
 
 if (varid > 0) then
    qty_in_domain = .true.
