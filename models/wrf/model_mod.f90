@@ -304,6 +304,7 @@ integer, parameter :: FAILED_BOUNDS_CHECK = 44
 integer, parameter :: CANNOT_INTERPOLATE_QTY = 55
 integer, parameter :: POLAR_RESTRICTED = 10 ! polar observation while restrict_polar = .true.
 integer, parameter :: NOT_IN_ANY_DOMAIN = 11
+integer, parameter :: VERTICAL_LOCATION_FAIL = 66
 real(r8) :: lon_lat_vert(3)
 real(r8) :: xloc, yloc ! WRF i,j in the grid
 integer  :: i, j ! grid
@@ -315,6 +316,7 @@ integer :: k(ens_size)      ! level
 integer :: which_vert       ! vertical coordinate of the observation
 real(r8) :: zloc(ens_size)  ! vertical location of the obs for each ens member
 real(r8) :: fld_k(ens_size), fld_k_plus_1(ens_size) ! value at level k and k+1
+logical :: fail
 
 if ( .not. module_initialized ) call static_init_model
 
@@ -352,7 +354,12 @@ call getCorners(i, j, id, qty, ll, ul, lr, ur, rc)
 
 
 ! vertical location
-call get_bounding_levels(which_vert, id, lon_lat_vert, ens_size, state_handle, ll, ul, lr, ur, dx, dy, dxm, dym, k, zloc)
+call get_bounding_levels(which_vert, id, lon_lat_vert, ens_size, state_handle, ll, ul, lr, ur, dx, dy, dxm, dym, k, zloc, fail)
+if (fail) then
+   istatus(:) = VERTICAL_LOCATION_FAIL
+   return
+endif
+
 !    surface obs only 1 level
 
 fld_k(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dy) ! level k
@@ -873,7 +880,7 @@ end function compute_geometric_height
 ! should this be get lower level?
 subroutine get_bounding_levels(which_vert, id, lon_lat_vert, ens_size, state_handle, &
                                ll, ul, lr, ur, dx, dy, dxm, dym, &
-                               level_below, zloc)
+                               level_below, zloc, fail)
 
 integer,  intent(in)  :: which_vert
 integer,  intent(in)  :: id
@@ -884,6 +891,7 @@ integer, dimension(2), intent(in) :: ll, ul, lr, ur ! (x,y) of each corner
 real(r8), intent(in)  :: dx, dxm, dy, dym ! grid fractions to obs
 integer,  intent(out) :: level_below(ens_size)
 real(r8), intent(out) :: zloc(ens_size) ! vertical location of the obs for each ens member
+logical,  intent(out) :: fail
 
 integer :: e ! loop variable
 real(r8) :: v_p(grid(id)%bt,ens_size)
@@ -892,13 +900,15 @@ logical :: lev0
 
 select case (which_vert)
    case(VERTISLEVEL)
-      zloc(:) = lon_lat_vert(3)
+      zloc(:) = lon_lat_vert(3); fail = .false.
    case(VERTISPRESSURE)
       call get_model_pressure_profile(id, ll, ul, lr, ur, dx, dy, dxm, dym, ens_size, state_handle, v_p)
       do e = 1, ens_size
          call pres_to_zk(lon_lat_vert(3), v_p(:,e), grid(id)%bt, zloc(e), lev0)
          if (lev0) then
             print*, "pressure obs below lowest sigma"
+            fail = .true.
+            return
          endif
       enddo
    case(VERTISHEIGHT)
@@ -907,13 +917,18 @@ select case (which_vert)
          call height_to_zk(lon_lat_vert(3), v_h(:, e), grid(id)%bt, zloc(e), lev0)
          if (lev0) then
             print*, "height obs below lowest sigma"
+               fail = .true.
+            return
          endif
       enddo
    case(VERTISSURFACE)
        zloc(:) = 1.0_r8
+       fail = .false.
        ! call check to see if the station height is too far away from the model surface height
    case(VERTISUNDEF)
-       zloc = 0.0_r8
+       zloc = 0.0_r8; fail = .false.
+   case default
+       fail = .true.
 end select
 
 print*, 'not done bounding levels'
