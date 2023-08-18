@@ -31,9 +31,22 @@ use netcdf_utilities_mod, only : nc_add_global_attribute, nc_synchronize_file, &
                                  nc_get_global_attribute
 
 use state_structure_mod, only : add_domain, get_domain_size, get_model_variable_indices, &
-                                get_dim_name, get_num_dims
+                                get_dim_name, get_num_dims, get_dart_vector_index, &
+                                get_varid_from_kind
 
-use obs_kind_mod, only : get_index_for_quantity
+use distributed_state_mod, only : get_state_array
+
+use obs_kind_mod, only : get_index_for_quantity, &
+                         QTY_U_WIND_COMPONENT, &
+                         QTY_v_WIND_COMPONENT, &
+                         QTY_10M_U_WIND_COMPONENT, &
+                         QTY_10M_V_WIND_COMPONENT, &
+                         QTY_DENSITY, &
+                         QTY_GEOPOTENTIAL_HEIGHT, &
+                         QTY_PRESSURE, &
+                         QTY_SURFACE_TYPE, &
+                         QTY_SURFACE_ELEVATION, &
+                         QTY_LANDMASK
 
 use ensemble_manager_mod, only : ensemble_type
 
@@ -90,8 +103,9 @@ type(time_type) :: assimilation_time_step
 integer, parameter :: MAX_STATE_VARIABLES = 100
 integer, parameter :: NUM_STATE_TABLE_COLUMNS = 4
 integer, parameter :: NUM_BOUNDS_TABLE_COLUMNS = 4
-
-integer, allocatable :: wrf_dom(:)
+ 
+integer, allocatable :: wrf_dom(:) ! This needs a better name, it is the id from add_domain
+                                   ! for each wrf_domain added to the state
 
 
 !-- Namelist with default values --
@@ -120,10 +134,15 @@ logical :: lallow_obs_below_vol = .true.
 logical :: log_horz_interpM = .false.
 logical :: log_horz_interpQ = .false.
 
+! wrf options, apply to domain 1 only
+logical :: polar = .false.
+logical :: periodic_x = .false.
+logical :: periodic_y = .false.
+
+!-------------------------------
 
 logical :: allow_perturbed_ics = .false.
-logical, parameter :: restrict_polar = .false.
-!-------------------------------
+logical, parameter :: restrict_polar = .false. !HK what is this for?
 
 
 namelist /model_nml/ &
@@ -152,6 +171,7 @@ type grid_ll
   real(r8) :: truelat1, truelat2, stand_lon
   real(r8), dimension(:,:),   allocatable :: latitude, latitude_u, latitude_v
   real(r8), dimension(:,:),   allocatable :: longitude, longitude_u, longitude_v
+  integer :: we, sn ! west-east, south-north number of grid points
 end type grid_ll
 
 ! need grid for each domain
@@ -263,18 +283,20 @@ integer, parameter :: POLAR_RESTRICTED = 10 ! polar observation while restrict_p
 integer, parameter :: NOT_IN_ANY_DOMAIN = 11
 real(r8) :: lon_lat_lev(3)
 real(r8) :: xloc, yloc ! WRF i,j in the grid
+integer  :: i, j ! grid
+real(r8) :: dx, dxm, dy, dym ! grid fractions
+integer :: ll(2), ul(2), lr(2), ur(2) !(x,y) of four corners
+integer :: rc ! return code getCorners
 integer :: id
+integer :: k(ens_size)     ! level
+real(r8) :: zloc(ens_size)
+real(r8) :: fld_k(ens_size), fld_k_plus_1(ens_size) ! value at level k and k+1
 
 if ( .not. module_initialized ) call static_init_model
 
 expected_obs(:) = MISSING_R8
 
 istatus(:) = 1
-
-if (.not. able_to_interpolate_qty() ) then
-   istatus(:) = CANNOT_INTERPOLATE_QTY
-   return
-endif
 
 lon_lat_lev = get_location(location)
 call get_domain_info(lon_lat_lev(1),lon_lat_lev(2),id,xloc,yloc)
@@ -286,16 +308,104 @@ if (id == 0) then
    return
 endif
 
+
+if (.not. able_to_interpolate_qty(id, qty) ) then
+   istatus(:) = CANNOT_INTERPOLATE_QTY
+   return
+endif
+
 if ( bounds_check_fail() ) then
    istatus(:) = FAILED_BOUNDS_CHECK
    return
 endif
 
+! vertical location
+call get_bounding_levels()
+!    surface obs only 1 level
+
+! horizontal location
+call toGrid(xloc,i,dx,dxm)
+call toGrid(yloc,j,dy,dym)
+call getCorners(i, j, id, qty, ll, ul, lr, ur, rc )
+
+fld_k(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dy) ! level k
+fld_k_plus_1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dy) ! level k+1
+
+! interpolate vertically
+expected_obs(:) = vertical_interpolation(ens_size, k, zloc, fld_k, fld_k_plus_1)
 
 end subroutine model_interpolate
 
 
+!------------------------------------------------------------------
+function simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
+integer,             intent(in) :: ens_size
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: qty
+integer,             intent(in) :: id
+integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
+real(r8),            intent(in) :: dxm, dx, dy, dym
+
+real(r8) ::  simple_interpolation(ens_size)
+
+integer :: e ! loop variable
+! lower left, upper left, lower right, upper right
+integer(i8), dimension(ens_size)  :: ill, iul, ilr, iur  ! dart index at four corners
+real(r8),    dimension(ens_size)  :: x_ill, x_iul, x_ilr, x_iur ! state value at four corners
+
+
+do e = 1, ens_size
+                              !   x,     y,     z
+   ill(e) = get_dart_vector_index(ll(1), ll(2), k(e), wrf_dom(id), qty)
+   iul(e) = get_dart_vector_index(ul(1), ul(2), k(e), wrf_dom(id), qty)
+   ilr(e) = get_dart_vector_index(lr(1), lr(2), k(e), wrf_dom(id), qty)
+   iur(e) = get_dart_vector_index(ur(1), ur(2), k(e), wrf_dom(id), qty)
+
+enddo
+
+call get_state_array(x_ill, ill, state_handle)
+call get_state_array(x_iul, iul, state_handle)
+call get_state_array(x_ilr, ilr, state_handle)
+call get_state_array(x_iur, iur, state_handle)
+
+simple_interpolation = dym*( dxm*x_ill(:) + dx*x_ilr(:) ) + dy*( dxm*x_iul(:) + dx*x_iur(:) )
+
+end function simple_interpolation
+
+!------------------------------------------------------------------
+function vertical_interpolation(ens_size, k, zloc, fld1, fld2)
+
+integer,  intent(in) :: ens_size
+integer,  intent(in) :: k(ens_size)
+real(r8), intent(in) :: zloc(ens_size)
+real(r8), intent(in) :: fld1(ens_size), fld2(ens_size)
+
+real(r8) :: vertical_interpolation(ens_size)
+
+real(r8) :: dz, dzm
+integer  :: z ! level
+integer :: e
+
+do e = 1, ens_size
+   call toGrid(zloc(e), z, dz, dzm)
+   ! comment from original code:
+   ! If you get here and zloc < 1.0, then z will be 0, and
+   ! we should extrapolate.  fld(1,:) and fld(2,:) where computed
+   ! at levels 1 and 2.
+
+   if (z >= 1) then
+      ! Linearly interpolate between levels
+      vertical_interpolation(e) = dzm*fld1(e) + dz*fld2(e)
+   else
+      ! Extrapolate below first level.
+      vertical_interpolation(e) = fld1(e) - (fld2(e)-fld1(e))*dzm
+   endif
+enddo
+
+
+end function vertical_interpolation
 !------------------------------------------------------------------
 ! Returns the smallest increment in time that the model is capable 
 ! of advancing the state in a given implementation, or the shortest
@@ -607,6 +717,7 @@ do i = 1, num_domains
     call nc_get_variable_size(ncid, 'XLONG', dim_size)
     allocate(grid(i)%longitude(dim_size(1), dim_size(2)))
     call nc_get_variable(ncid, 'XLONG', grid(i)%longitude, routine)
+    grid(i)%we = dim_size(1); grid(i)%sn = dim_size(2)
 
     call nc_get_variable_size(ncid, 'XLONG_U', dim_size)
     allocate(grid(i)%longitude_u(dim_size(1), dim_size(2)))
@@ -643,7 +754,7 @@ enddo
 end subroutine read_grid
 
 !------------------------------------------------------------------
-function compute_geometric_height(geopot, lat)
+pure function compute_geometric_height(geopot, lat)
 
 real(r8), intent(in)  :: geopot
 real(r8), intent(in)  :: lat
@@ -689,6 +800,13 @@ compute_geometric_height = (termr*geopot) / ( (termg/grav) * termr - geopot )
 
 end function compute_geometric_height
 
+!------------------------------------------------------------------
+subroutine get_bounding_levels()
+
+print*, 'not done bounding levels'
+
+
+end subroutine get_bounding_levels
 
 !------------------------------------------------------------------
 ! If there are other domains in the state:
@@ -805,13 +923,71 @@ bounds_check_fail = .false.
 end function bounds_check_fail
 
 !------------------------------------------------------------------
-function able_to_interpolate_qty()
+function able_to_interpolate_qty(id, qty)
+
+integer, intent(in) :: id
+integer, intent(in) :: qty
 
 logical :: able_to_interpolate_qty
 
-able_to_interpolate_qty = .true.
+select case (qty)
+   case (QTY_U_WIND_COMPONENT)
+      able_to_interpolate_qty = qty_in_domain(id, QTY_U_WIND_COMPONENT) .and. &
+                                qty_in_domain(id, QTY_V_WIND_COMPONENT)
+   case (QTY_V_WIND_COMPONENT)
+      able_to_interpolate_qty = qty_in_domain(id, QTY_U_WIND_COMPONENT) .and. &
+                                qty_in_domain(id, QTY_V_WIND_COMPONENT)
+
+   case (QTY_10M_U_WIND_COMPONENT)
+      able_to_interpolate_qty = qty_in_domain(id, QTY_10M_U_WIND_COMPONENT) .and. &
+                                qty_in_domain(id, QTY_10M_V_WIND_COMPONENT)
+
+   case (QTY_10M_V_WIND_COMPONENT)
+      able_to_interpolate_qty = qty_in_domain(id, QTY_10M_U_WIND_COMPONENT) .and. &
+                                qty_in_domain(id, QTY_10M_V_WIND_COMPONENT)
+
+   case (QTY_DENSITY)
+      able_to_interpolate_qty = qty_in_domain(id, QTY_GEOPOTENTIAL_HEIGHT) .and. &
+                                qty_in_domain(id, QTY_PRESSURE)
+
+   case (QTY_SURFACE_TYPE)
+      able_to_interpolate_qty = .true.  ! land mask XLAND is static data
+
+   case (QTY_LANDMASK)
+      able_to_interpolate_qty = .true.  ! land mask XLAND is static data
+
+   case (QTY_SURFACE_ELEVATION)
+      able_to_interpolate_qty = .true.  ! terrain height HGT is static data
+
+   case default
+     able_to_interpolate_qty = qty_in_domain(id, qty)
+
+end select
+
 
 end function able_to_interpolate_qty
+
+!------------------------------------------------------------------
+function qty_in_domain(id, qty)
+
+integer, intent(in) :: id
+integer, intent(in) :: qty
+
+logical :: qty_in_domain
+
+integer :: varid
+
+varid = get_varid_from_kind(wrf_dom(id), qty)
+
+print*, 'varid', varid
+
+if (varid > 0) then
+   qty_in_domain = .true.
+else
+   qty_in_domain = .false.
+endif
+
+end function qty_in_domain
 
 !------------------------------------------------------------------
 ! TODO
@@ -844,7 +1020,7 @@ print*, 'obslon, obslat', obslon, obslat, min(max(obslat,-89.9999999_r8),89.9999
 
    call latlon_to_ij(grid(id)%proj,min(max(obslat,-89.9999999_r8),89.9999999_r8),obslon,iloc,jloc)
 
-   if (found_in_domain(iloc,jloc)) return
+   if (found_in_domain(id, iloc,jloc)) return
 
 enddo
 
@@ -854,13 +1030,348 @@ id=0
 end subroutine get_domain_info
 
 !------------------------------------------------------------------
-pure function found_in_domain(i,j)
+function found_in_domain(id, i,j)
+integer,  intent(in) :: id
 real(r8), intent(in) :: i, j
 logical :: found_in_domain
 
-found_in_domain = .false.
+found_in_domain = .true.
+
+if (id > 1) then
+
+   found_in_domain = ( i >= 1.0_r8 .and. i <= real(grid(id)%we,r8) .and. &
+                       j >= 1.0_r8 .and. j <= real(grid(id)%sn,r8) )
+
+else ! have to check periodic
+
+print*, 'not checking periodic'
+found_in_domain = ( i >= 1.0_r8 .and. i <= real(grid(id)%we,r8) .and. &
+                    j >= 1.0_r8 .and. j <= real(grid(id)%sn,r8) )
+
+endif
+
+! Array bound checking depends on whether periodic or not -- these are
+!   real-valued indices here, so we cannot use boundsCheck  :(
+
+!if ( wrf%dom(id)%periodic_x .and. .not. wrf%dom(id)%periodic_y  ) then
+!   if ( wrf%dom(id)%polar ) then
+!      !   Periodic     X & M_grid ==> [1 we+1)
+!      !   Periodic     Y & M_grid ==> [0.5 sn+0.5]
+!      if ( iloc >= 1.0_r8 .and. iloc <  real(wrf%dom(id)%we,r8)+1.0_r8 .and. &
+!           jloc >= 0.5_r8 .and. jloc <= real(wrf%dom(id)%sn,r8)+0.5_r8 ) &
+!           dom_found = .true.
+!   else
+!      !   Periodic     X & M_grid ==> [1 we+1)
+!      !   NOT Periodic Y & M_grid ==> [1 sn]
+!      if ( iloc >= 1.0_r8 .and. iloc <  real(wrf%dom(id)%we,r8)+1.0_r8 .and. &
+!           jloc >= 1.0_r8 .and. jloc <= real(wrf%dom(id)%sn,r8) ) &
+!           dom_found = .true.
+!   endif
+!
+!elseif ( wrf%dom(id)%periodic_x .and. wrf%dom(id)%periodic_y ) then
+!      !   Periodic     X & M_grid ==> [1 we+1)
+!      !   Periodic     Y & M_grid ==> [1 sn+1]
+!      if ( iloc >= 1.0_r8 .and. iloc <  real(wrf%dom(id)%we,r8)+1.0_r8 .and. &
+!           jloc >= 1.0_r8 .and. jloc <= real(wrf%dom(id)%sn,r8)+1.0_r8 ) &
+!           dom_found = .true.
+!
+!else
+!   if ( wrf%dom(id)%polar ) then
+!      !   NOT Periodic X & M_grid ==> [1 we]
+!      !   Periodic     Y & M_grid ==> [0.5 sn+0.5]
+!      if ( iloc >= 1.0_r8 .and. iloc <= real(wrf%dom(id)%we,r8) .and. &
+!           jloc >= 0.5_r8 .and. jloc <= real(wrf%dom(id)%sn,r8)+0.5_r8 ) &
+!           dom_found = .true.
+!   else
+!      !   NOT Periodic X & M_grid ==> [1 we]
+!      !   NOT Periodic Y & M_grid ==> [1 sn]
+!      if ( iloc >= 1.0_r8 .and. iloc <= real(wrf%dom(id)%we,r8) .and. &
+!           jloc >= 1.0_r8 .and. jloc <= real(wrf%dom(id)%sn,r8) ) &
+!           dom_found = .true.
+!   endif
+!endif
+
 
 end function found_in_domain
+
+!------------------------------------------------------------------
+
+subroutine getCorners(i, j, id, qty, ll, ul, lr, ur, rc)
+
+integer, intent(in)  :: i, j, id, qty
+integer, dimension(2), intent(out) :: ll, ul, lr, ur ! (x,y) of each corner
+integer, intent(out) :: rc
+
+! set return code to 0, and change this if necessary
+rc = 0
+
+!----------------
+! LOWER LEFT ll
+!----------------
+! i and j are the lower left (ll) corner already
+!
+! NOTE :: once we allow for polar periodicity, the incoming j index could actually
+!           be 0, which would imply a ll(2) value of 1, with a ll(1) value 180 degrees
+!           of longitude away from the incoming i index!  But we have not included
+!           this possibility yet.
+
+! As of 22 Oct 2007, this option is not allowed!
+!   Note that j = 0 can only happen if we are on the M (or U) wrt to latitude
+!!!if ( wrf%dom(id)%polar .and. j == 0 .and. .not. restrict_polar ) then
+!!!
+!!!   ! j = 0 should be mapped to j = 1 (ll is on other side of globe)
+!!!   ll(2) = 1
+!!!   
+!!!   ! Need to map i index 180 degrees away
+!!!   ll(1) = i + wrf%dom(id)%we/2
+!!!   
+!!!   ! Check validity of bounds & adjust by periodicity if necessary
+!!!   if ( ll(1) > wrf%dom(id)%we ) ll(1) = ll(1) - wrf%dom(id)%we
+!!!
+!!!   ! We shouldn't be able to get this return code if restrict_polar = .true.
+!!!    rc = 1
+!!!    print*, 'model_mod.f90 :: getCorners :: Tried to do polar bc -- rc = ', rc
+!!!
+!!!else
+!!!   
+!!!   ll(1) = i
+!!!   ll(2) = j
+!!!
+!!!endif
+
+
+!----------------
+! LOWER RIGHT lr
+!----------------
+
+! Most of the time, the lower right (lr) corner will simply be (i+1,j), but we need to check
+! Summary of x-direction corners:
+!   Periodic     & M_grid has ind = [1 wes)
+!     ind = [1 we)    ==> ind_p_1 = ind + 1
+!     ind = [we wes)  ==> ind_p_1 = 1
+!   Periodic     & U_grid has ind = [1 wes)
+!     ind = [1 we)    ==> ind_p_1 = ind + 1
+!     ind = [we wes)  ==> ind_p_1 = wes       ( keep in mind that U(1) = U(wes) if periodic )
+!   NOT Periodic & M_grid has ind = [1 we)
+!     ind = [1 we-1)  ==> ind_p_1 = ind + 1
+!     ind = [we-1 we) ==> ind_p_1 = we
+!   NOT Periodic & U_grid has ind = [1 wes)
+!     ind = [1 we)    ==> ind_p_1 = ind + 1
+!     ind = [we wes)  ==> ind_p_1 = wes
+
+!!!if ( wrf%dom(id)%periodic_x ) then
+!!!  
+!!!   ! Check to see what grid we have, M vs. U
+!!!   if ( wrf%dom(id)%var_size(1,type) == wrf%dom(id)%wes ) then
+!!!      ! U-grid is always i+1 -- do this in reference to already adjusted ll points
+!!!      lr(1) = ll(1) + 1
+!!!      lr(2) = ll(2)
+!!!   else
+!!!      ! M-grid is i+1 except if we <= ind < wes, in which case it's 1
+!!!      if ( i < wrf%dom(id)%we ) then
+!!!         lr(1) = ll(1) + 1
+!!!      else
+!!!         lr(1) = 1
+!!!      endif
+!!!      lr(2) = ll(2)
+!!!   endif
+!!!
+!!!else
+!!!
+!!!   ! Regardless of grid, NOT Periodic always has i+1
+!!!   lr(1) = ll(1) + 1
+!!!   lr(2) = ll(2)
+!!!
+!!!endif
+      
+
+!----------------
+! UPPER LEFT ul
+!----------------
+
+!** NOTE: For now are disallowing observation locations that occur poleward of the
+!           first and last M-grid gridpoints.  This need not be the case because
+!           the information should be available for proper interpolation across the
+!           poles, but it will require more clever thinking.  Hopefully this can
+!           be added in later.
+
+! Most of the time, the upper left (ul) corner will simply be (i,j+1), but we need to check
+! Summary of y-direction corners:
+!   Periodic     & M_grid has ind = [0 sns)  *though in practice, [1 sn)*
+!     ind = [1 sn-1)  ==> ind_p_1 = ind + 1
+!     ind = [sn-1 sn) ==> ind_p_1 = sn
+!   Periodic     & V_grid has ind = [1 sns)
+!     ind = [1 sn)    ==> ind_p_1 = ind + 1
+!     ind = [sn sns)  ==> ind_p_1 = sns
+!   NOT Periodic & M_grid has ind = [1 sn)
+!     ind = [1 sn-1)  ==> ind_p_1 = ind + 1
+!     ind = [sn-1 sn) ==> ind_p_1 = sn
+!   NOT Periodic & V_grid has ind = [1 sns)
+!     ind = [1 sn)    ==> ind_p_1 = ind + 1
+!     ind = [sn sns)  ==> ind_p_1 = sns
+!
+! Hence, with our current polar obs restrictions, all four possible cases DO map into
+!   ul = (i,j+1).  But this will not always be the case.
+
+!!!if ( wrf%dom(id)%polar ) then
+!!!
+!!!   ! Check to see what grid we have, M vs. V
+!!!   if ( wrf%dom(id)%var_size(2,type) == wrf%dom(id)%sns ) then
+!!!      ! V-grid is always j+1, even if we allow for full [1 sns) range
+!!!      ul(1) = ll(1)
+!!!      ul(2) = ll(2) + 1
+!!!   else
+!!!      ! M-grid changes depending on polar restriction
+!!!      if ( restrict_polar ) then
+!!!         ! If restricted, then we can simply add 1
+!!!         ul(1) = ll(1)
+!!!         ul(2) = ll(2) + 1
+!!!      else
+!!!         ! If not restricted, then we can potentially wrap over the north pole, which
+!!!         !   means that ul(2) is set to sn and ul(1) is shifted by 180 deg.
+!!!
+!!!         if ( j == wrf%dom(id)%sn ) then
+!!!            ! j > sn should be mapped to j = sn (ul is on other side of globe)
+!!!            ul(2) = wrf%dom(id)%sn
+!!!   
+!!!            ! Need to map i index 180 degrees away
+!!!            ul(1) = ll(1) + wrf%dom(id)%we/2
+!!!   
+!!!            ! Check validity of bounds & adjust by periodicity if necessary
+!!!            if ( ul(1) > wrf%dom(id)%we ) ul(1) = ul(1) - wrf%dom(id)%we
+!!!
+!!!            ! We shouldn't be able to get this return code if restrict_polar = .true.
+!!!             rc = 1
+!!!             print*, 'model_mod.f90 :: getCorners :: Tried to do polar bc -- rc = ', rc
+!!!
+!!!         elseif ( j == 0 ) then
+!!!            ! In this case, we have place ll on the other side of the globe, so we
+!!!            !   cannot reference ul to ll
+!!!            ul(1) = i
+!!!            ul(2) = 1
+!!!
+!!!         else
+!!!            ! We can confidently set to j+1
+!!!            ul(1) = ll(1)
+!!!            ul(2) = ll(2) + 1
+!!!         endif
+!!!
+!!!      endif
+!!!   endif
+!!!
+!!!elseif ( wrf%dom(id)%periodic_y ) then
+!!!
+!!!   ! Check to see what grid we have, M vs. U
+!!!   if ( wrf%dom(id)%var_size(2,type) == wrf%dom(id)%sns ) then
+!!!      ! V-grid is always j+1 -- do this in reference to already adjusted ll points
+!!!      ul(1) = ll(1)
+!!!      ul(2) = ll(2)+1
+!!!   else
+!!!      ! M-grid is j+1 except if we <= ind < wes, in which case it's 1
+!!!      if ( j < wrf%dom(id)%sn ) then
+!!!         ul(2) = ll(2) + 1
+!!!      else
+!!!         ul(2) = 1
+!!!      endif
+!!!      ul(1) = ll(1)
+!!!   endif
+!!!
+!!!else
+!!!
+!!!   ! Regardless of grid, NOT Periodic always has j+1
+!!!   ul(1) = ll(1)
+!!!   ul(2) = ll(2) + 1
+!!!
+!!!endif
+   
+
+!----------------
+! UPPER RIGHT ur
+!----------------
+
+!*** NOTE: For now are disallowing observation locations that occur poleward of the
+!            first and last M-grid gridpoints.  This need not be the case because
+!            the information should be available for proper interpolation across the
+!            poles, but it will require more clever thinking.  Hopefully this can
+!            be added in later.
+
+! Most of the time, the upper right (ur) corner will simply be (i+1,j+1), but we need to check
+!   In fact, we can largely get away with ur = (lr(1),ul(2)).  Where this will NOT work is
+!   where we have had to re-map the i index to the other side of the globe (180 deg) due to
+!   the polar boundary condition.  There are no situations where ur(2) will not be equal to
+!   ul(2).
+
+!!!ur(2) = ul(2)
+!!!
+!!!! Need to check if ur(1) .ne. lr(1)
+!!!if ( wrf%dom(id)%polar .and. .not. restrict_polar ) then
+!!!
+!!!   ! Only if j == 0 or j == sn
+!!!   if ( j == 0 .or. j ==  wrf%dom(id)%sn) then
+!!!      ! j == 0 means that ll(1) = i + 180 deg, so we cannot use lr(1) -- hence, we will
+!!!      !   add 1 to ul(1), unless doing so spans the longitude seam point.
+!!!      ! j == sn means that ul(1) = i + 180 deg.  Here we cannot use lr(1) either because
+!!!      !   it will be half a domain away from ul(1)+1.  Be careful of longitude seam point.
+!!!
+!!!      !   Here we need to check longitude periodicity and the type of grid
+!!!      if ( wrf%dom(id)%periodic_x ) then
+!!!  
+!!!         ! Check to see what grid we have, M vs. U
+!!!         if ( wrf%dom(id)%var_size(1,type) == wrf%dom(id)%wes ) then
+!!!            ! U-grid is always i+1 -- do this in reference to already adjusted ll points
+!!!            ur(1) = ul(1) + 1
+!!!         else
+!!!            ! M-grid is i+1 except if we <= ind < wes, in which case it's 1
+!!!            if ( ul(1) < wrf%dom(id)%we ) then
+!!!               ur(1) = ul(1) + 1
+!!!            else
+!!!               ur(1) = 1
+!!!            endif
+!!!         endif
+!!!
+!!!      else
+!!!
+!!!         ! Regardless of grid, NOT Periodic always has i+1
+!!!         ur(1) = ul(1) + 1
+!!!
+!!!      endif
+!!!
+!!!   ! If not a special j value, then we are set for the ur(1) = lr(1)
+!!!   else
+!!!
+!!!      ur(1) = lr(1)
+!!!
+!!!   endif
+!!!
+!!!! If not an unrestricted polar periodic domain, then we have nothing to worry about
+!!!else
+!!!
+!!!   ur(1) = lr(1)
+!!!
+!!!endif
+
+end subroutine getCorners
+
+
+!------------------------------------------------------------------
+
+subroutine toGrid (x, j, dx, dxm)
+
+!  Transfer obs. x to grid j and calculate its
+!  distance to grid j and j+1
+
+real(r8), intent(in)  :: x
+real(r8), intent(out) :: dx, dxm
+integer,  intent(out) :: j
+
+j = int (x)
+
+dx = x - real (j)
+
+dxm= 1.0_r8 - dx
+
+end subroutine toGrid
+
 !------------------------------------------------------------------
 subroutine setup_map_projection(id)
 
