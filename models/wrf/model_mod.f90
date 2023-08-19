@@ -52,7 +52,18 @@ use obs_kind_mod, only : get_index_for_quantity, &
                          QTY_LANDMASK, &
                          QTY_SURFACE_PRESSURE, &
                          QTY_VAPOR_MIXING_RATIO, &
-                         QTY_TEMPERATURE
+                         QTY_TEMPERATURE, &
+                         QTY_POTENTIAL_TEMPERATURE, &
+                         QTY_DENSITY, &
+                         QTY_VERTICAL_VELOCITY, &
+                         QTY_SPECIFIC_HUMIDITY, &
+                         QTY_VAPOR_MIXING_RATIO, &
+                         QTY_SURFACE_PRESSURE, &
+                         QTY_VORTEX_LAT, &
+                         QTY_VORTEX_LON, &
+                         QTY_VORTEX_PMIN,QTY_VORTEX_WMAX, &
+                         QTY_SKIN_TEMPERATURE, &
+                         QTY_SURFACE_TYPE
 
 use ensemble_manager_mod, only : ensemble_type
 
@@ -346,7 +357,7 @@ if ( bounds_check_fail() ) then
    return
 endif
 
-! horizontal location
+! horizontal location mass point
 call toGrid(xloc,i,dx,dxm)
 call toGrid(yloc,j,dy,dym)
 call getCorners(i, j, id, qty, ll, ul, lr, ur, rc)
@@ -361,9 +372,37 @@ if (fail) then
 endif
 
 !    surface obs only 1 level
-
-fld_k(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dy) ! level k
-fld_k_plus_1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dy) ! level k+1
+select case (qty)
+   case (QTY_U_WIND_COMPONENT, QTY_V_WIND_COMPONENT )
+      print*, 'Do some wind'
+   case (QTY_TEMPERATURE)
+      print*, 'Do some temperature'
+   case (QTY_POTENTIAL_TEMPERATURE)
+      print*, 'Do some potential temperature'
+   case (QTY_DENSITY)
+      print*, 'Do some density'
+   case (QTY_VERTICAL_VELOCITY)
+      print*, 'Do some velocity'
+   case (QTY_SPECIFIC_HUMIDITY)
+      print*, 'Do specific humitdity'
+   case (QTY_VAPOR_MIXING_RATIO)
+      print*, 'Do some vapor mixing ratio'
+   case (QTY_PRESSURE, QTY_SURFACE_PRESSURE)
+      print*, 'should decide earlier surface vs not'
+   case (QTY_VORTEX_LAT, QTY_VORTEX_LON, QTY_VORTEX_PMIN, QTY_VORTEX_WMAX)
+      call vortex()
+   case (QTY_GEOPOTENTIAL_HEIGHT)
+      print*, 'Do some geopotential height'
+   case (QTY_SURFACE_ELEVATION)
+      print*, 'Do some surface elevation'
+   case (QTY_SKIN_TEMPERATURE)
+      print*, 'skin temp is just a surface obs'
+   case (QTY_SURFACE_TYPE)
+      print*, 'Do some surface type' ! Need LAND MASK also?
+   case default ! simple interpolation
+      fld_k(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dy) ! level k
+      fld_k_plus_1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dy) ! level k+1
+end select
 
 ! interpolate vertically
 expected_obs(:) = vertical_interpolation(ens_size, k, zloc, fld_k, fld_k_plus_1)
@@ -1434,18 +1473,11 @@ integer, intent(in) :: qty
 logical :: able_to_interpolate_qty
 
 select case (qty)
-   case (QTY_U_WIND_COMPONENT)
-      able_to_interpolate_qty = qty_in_domain(id, QTY_U_WIND_COMPONENT) .and. &
-                                qty_in_domain(id, QTY_V_WIND_COMPONENT)
-   case (QTY_V_WIND_COMPONENT)
+   case (QTY_U_WIND_COMPONENT, QTY_V_WIND_COMPONENT)
       able_to_interpolate_qty = qty_in_domain(id, QTY_U_WIND_COMPONENT) .and. &
                                 qty_in_domain(id, QTY_V_WIND_COMPONENT)
 
-   case (QTY_10M_U_WIND_COMPONENT)
-      able_to_interpolate_qty = qty_in_domain(id, QTY_10M_U_WIND_COMPONENT) .and. &
-                                qty_in_domain(id, QTY_10M_V_WIND_COMPONENT)
-
-   case (QTY_10M_V_WIND_COMPONENT)
+   case (QTY_10M_U_WIND_COMPONENT, QTY_10M_V_WIND_COMPONENT)
       able_to_interpolate_qty = qty_in_domain(id, QTY_10M_U_WIND_COMPONENT) .and. &
                                 qty_in_domain(id, QTY_10M_V_WIND_COMPONENT)
 
@@ -1946,8 +1978,11 @@ end subroutine setup_map_projection
 !------------------------------------------------------------------
 ! Vortex
 
+subroutine vortex()
 
+print*, 'Do vortex'
 
+end subroutine vortex
 
 end module model_mod
 
