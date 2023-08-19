@@ -162,7 +162,7 @@ logical :: allow_perturbed_ics = .false.
 
 logical, parameter :: restrict_polar = .false. !HK what is this for?
 real(r8), parameter :: ts0 = 300.0_r8        ! Base potential temperature for all levels.
-
+real(r8), parameter :: kappa = 2.0_r8/7.0_r8 ! gas_constant / cp
 
 namelist /model_nml/ &
 default_state_variables, &
@@ -326,7 +326,7 @@ integer :: id
 integer :: k(ens_size)      ! level
 integer :: which_vert       ! vertical coordinate of the observation
 real(r8) :: zloc(ens_size)  ! vertical location of the obs for each ens member
-real(r8) :: fld_k(ens_size), fld_k_plus_1(ens_size) ! value at level k and k+1
+real(r8) :: fld_k1(ens_size), fld_k2(ens_size) ! value at level k and k+1
 logical :: fail
 
 if ( .not. module_initialized ) call static_init_model
@@ -371,14 +371,16 @@ if (fail) then
    return
 endif
 
-!    surface obs only 1 level
+!    todo: surface obs only 1 level
 select case (qty)
    case (QTY_U_WIND_COMPONENT, QTY_V_WIND_COMPONENT )
       print*, 'Do some wind'
    case (QTY_TEMPERATURE)
-      print*, 'Do some temperature'
+      fld_k1 = temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+      fld_k2 = temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
    case (QTY_POTENTIAL_TEMPERATURE)
-      print*, 'Do some potential temperature'
+      fld_k1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym) + ts0
+      fld_k2 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym) + ts0
    case (QTY_DENSITY)
       print*, 'Do some density'
    case (QTY_VERTICAL_VELOCITY)
@@ -400,12 +402,12 @@ select case (qty)
    case (QTY_SURFACE_TYPE)
       print*, 'Do some surface type' ! Need LAND MASK also?
    case default ! simple interpolation
-      fld_k(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dy) ! level k
-      fld_k_plus_1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dy) ! level k+1
+      fld_k1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym) ! level k
+      fld_k2(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym) ! level k+1
 end select
 
 ! interpolate vertically
-expected_obs(:) = vertical_interpolation(ens_size, k, zloc, fld_k, fld_k_plus_1)
+expected_obs(:) = vertical_interpolation(ens_size, k, zloc, fld_k1, fld_k2)
 
 end subroutine model_interpolate
 
@@ -991,19 +993,20 @@ real(r8), dimension(ens_size) :: x_ill, x_ilr, x_iul, x_iur
 real(r8), dimension(ens_size) :: pres1, pres2, pres3, pres4
 real(r8), dimension(ens_size) :: lev2_pres1, lev2_pres2, lev2_pres3, lev2_pres4
 
-integer :: var_id
-integer :: k
+integer :: var_id, levk
+integer :: k(ens_size)
 
-do k=1, grid(id)%bt ! number of mass levels
+do levk=1, grid(id)%bt ! number of mass levels
 
+   k(:) = levk
    pres1 = model_pressure_t(ll(1), ll(2), k, id, state_handle, ens_size)
    pres2 = model_pressure_t(lr(1), lr(2), k, id, state_handle, ens_size)
    pres3 = model_pressure_t(ul(1), ul(2), k, id, state_handle, ens_size)
    pres4 = model_pressure_t(ur(1), ur(2), k, id, state_handle, ens_size)
 
-   v_p(k, :) = interp_4pressure(pres1, pres2, pres3, pres4, dx, dxm, dy, dym, ens_size)
+   v_p(levk, :) = interp_4pressure(pres1, pres2, pres3, pres4, dx, dxm, dy, dym, ens_size)
 
-   if (k == 2) then ! store result for extrapolation
+   if (levk == 2) then ! store result for extrapolation
      lev2_pres1(:) = pres1(:)
      lev2_pres2(:) = pres2(:)
      lev2_pres3(:) = pres3(:)
@@ -1045,18 +1048,17 @@ end subroutine get_model_pressure_profile
 function model_pressure_t(i,j,k,id,state_handle, ens_size)
 
 integer,             intent(in) :: ens_size
-integer,             intent(in) :: i,j,k,id
+integer,             intent(in) :: i,j,k(ens_size),id
 type(ensemble_type), intent(in) :: state_handle
 real(r8) :: model_pressure_t(ens_size)
 
-real (kind=r8), PARAMETER    :: rd_over_rv = gas_constant / gas_constant_v
-real (kind=r8), PARAMETER    :: cpovcv = 1.4_r8        ! cp / (cp - gas_constant)
+real (kind=r8), parameter    :: rd_over_rv = gas_constant / gas_constant_v
+real (kind=r8), parameter    :: cpovcv = 1.4_r8        ! cp / (cp - gas_constant)
 
-integer(i8) :: iqv !< I think this is i for index
-integer(i8) :: it !< change to array
-real(r8) :: qvf1(ens_size),rho(ens_size), x_iqv(ens_size), x_it(ens_size)
+integer(i8), dimension(ens_size) :: iqv, it
+real(r8),    dimension(ens_size) :: qvf1, rho, x_iqv, x_it
 
-integer :: var_id
+integer :: var_idv, var_idt, e
 
 model_pressure_t = missing_r8
 
@@ -1065,14 +1067,15 @@ model_pressure_t = missing_r8
 
 ! Simplification: alb*mub = (phb(i,j,k+1) - phb(i,j,k))/dnw(k)
 
-var_id = get_varid_from_kind(wrf_dom(id), QTY_VAPOR_MIXING_RATIO)
-iqv = get_dart_vector_index(i,j,k, wrf_dom(id), var_id)
+var_idv = get_varid_from_kind(wrf_dom(id), QTY_VAPOR_MIXING_RATIO)
+var_idt = get_varid_from_kind(wrf_dom(id), QTY_TEMPERATURE)
+do e = 1, ens_size
+  iqv = get_dart_vector_index(i,j,k(e), wrf_dom(id), var_idv)
+  it  = get_dart_vector_index(i,j,k(e), wrf_dom(id), var_idt)
+enddo
 
-var_id = get_varid_from_kind(wrf_dom(id), QTY_TEMPERATURE)
-it  = get_dart_vector_index(i,j,k, wrf_dom(id), var_id)
-
-x_iqv = get_state(iqv, state_handle)
-x_it  = get_state(it, state_handle)
+call get_state_array(x_iqv, iqv, state_handle)
+call get_state_array(x_it, it, state_handle)
 
 qvf1(:) = 1.0_r8 + x_iqv(:) / rd_over_rv
 
@@ -1315,31 +1318,32 @@ function model_rho_t(i,j,k,id,state_handle, ens_size)
 ! Calculate the total density on mass point (half (mass) levels, T-point).
 
 integer,             intent(in)  :: ens_size
-integer,             intent(in)  :: i,j,k,id
+integer,             intent(in)  :: i,j,k(ens_size),id
 type(ensemble_type), intent(in)  :: state_handle
 real(r8) :: model_rho_t(ens_size)
 
-integer(i8) :: imu,iph,iphp1
-real(r8)    :: ph_e(ens_size), x_imu(ens_size), x_iph(ens_size), x_iphp1(ens_size)
-integer :: var_id
-
+integer(i8), dimension(ens_size) :: imu,iph,iphp1
+real(r8),    dimension(ens_size) :: ph_e, x_imu, x_iph, x_iphp1
+integer :: var_id_mu, var_id_ph, e, lev1(ens_size)
 
 ! Adapted the code from WRF module_big_step_utilities_em.F ----
 !         subroutine calc_p_rho_phi      Y.-R. Guo (10/20/2004)
 
 ! Simplification: alb*mub = (phb(i,j,k+1) - phb(i,j,k))/dnw(k)
 
-var_id = get_varid_from_varname(wrf_dom(id), 'MU')
-imu   = get_dart_vector_index(i,j,1, wrf_dom(id), var_id)
+var_id_mu = get_varid_from_varname(wrf_dom(id), 'MU')
+var_id_ph = get_varid_from_kind(wrf_dom(id), QTY_GEOPOTENTIAL_HEIGHT)
+lev1(:) = 1
 
-var_id = get_varid_from_kind(wrf_dom(id), QTY_GEOPOTENTIAL_HEIGHT)
-iph   = get_dart_vector_index(i,j,k, wrf_dom(id), var_id)
-iphp1 = get_dart_vector_index(i,j,k+1, wrf_dom(id), QTY_GEOPOTENTIAL_HEIGHT)
+do e = 1, ens_size
+   imu   = get_dart_vector_index(i,j,lev1(e), wrf_dom(id), var_id_mu)
+   iph   = get_dart_vector_index(i,j,k(e), wrf_dom(id), var_id_ph)
+   iphp1 = get_dart_vector_index(i,j,k(e)+1, wrf_dom(id), var_id_ph)
+enddo
 
-x_imu = get_state(imu, state_handle)
-x_iph = get_state(iph, state_handle)
-x_iphp1 = get_state(iphp1, state_handle)
-
+call get_state_array(x_imu, imu, state_handle)
+call get_state_array(x_iph, iph, state_handle)
+call get_state_array(x_iphp1, iphp1, state_handle)
 
 ph_e = ( (x_iphp1 + stat_dat(id)%phb(i,j,k+1)) &
        - (x_iph   + stat_dat(id)%phb(i,j,k  )) ) / stat_dat(id)%dnw(k)
@@ -1349,6 +1353,38 @@ ph_e = ( (x_iphp1 + stat_dat(id)%phb(i,j,k+1)) &
 model_rho_t(:) = - (stat_dat(id)%mub(i,j)+x_imu) / ph_e
 
 end function model_rho_t
+
+
+!------------------------------------------------------------------
+
+function temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+
+integer,             intent(in) :: ens_size
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: qty
+integer,             intent(in) :: id
+integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
+real(r8),            intent(in) :: dxm, dx, dy, dym
+real(r8) :: temperature_interpolate(ens_size)
+
+real(r8), dimension(ens_size) :: a1, pres, pres1, pres2, pres3, pres4
+
+! In terms of perturbation potential temperature
+a1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dy)
+
+pres1 = model_pressure_t(ll(1), ll(2), k, id, state_handle, ens_size)
+pres2 = model_pressure_t(lr(1), lr(2), k, id, state_handle, ens_size)
+pres3 = model_pressure_t(ul(1), ul(2), k, id, state_handle, ens_size)
+pres4 = model_pressure_t(ur(1), ur(2), k, id, state_handle, ens_size)
+
+! Pressure at location
+pres = dym*( dxm*pres1 + dx*pres2 ) + dy*( dxm*pres3 + dx*pres4 )
+
+! Full sensible temperature field
+temperature_interpolate = (ts0 + a1(:))*(pres(:)/ps0)**kappa
+
+end function
 
 !------------------------------------------------------------------
 ! If there are other domains in the state:
