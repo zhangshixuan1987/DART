@@ -22,6 +22,21 @@ individual files.
 
 The changes are now listed with the most recent at the top.
 
+**August 21 2023 :: CAM-FV shell scripts. Tag v10.8.3**
+
+Performance improvements for CAM-FV shell scripts:
+
+- Avoid listing files if the CAM_PHIS file already exists.
+- Avoid using /var/tmp
+- RUNDIR defined after CIME_OUTPUT_ROOT change.
+- Warn if no inflation files found.
+
+**August 8 2023 :: MPAS-ATM constants and readthedocs fix. Tag v10.8.2**
+
+- MPAS-ATM constants updated to MPAS v5+
+- readthedocs build info updated.
+
+
 **July 27 2023 :: Bug-fixes for MOM6 and WRF. Tag v10.8.1**
 
 - bug-fixes:
