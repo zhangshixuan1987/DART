@@ -382,15 +382,19 @@ select case (qty)
       fld_k1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym) + ts0
       fld_k2 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym) + ts0
    case (QTY_DENSITY)
-      print*, 'Do some density'
+      fld_k1 = density_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+      fld_k2 = density_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case (QTY_VERTICAL_VELOCITY)
       print*, 'Do some velocity'
    case (QTY_SPECIFIC_HUMIDITY)
-      print*, 'Do specific humitdity'
+      fld_k1 = specific_humidity_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+      fld_k2 = specific_humidity_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case (QTY_VAPOR_MIXING_RATIO)
-      print*, 'Do some vapor mixing ratio'
-   case (QTY_PRESSURE, QTY_SURFACE_PRESSURE)
+      print*, 'Do some vapor mixing ratio, should decide earlier surface vs not'
+   case (QTY_PRESSURE)
       print*, 'should decide earlier surface vs not'
+      fld_k1 = pressure_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+      fld_k2 = pressure_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case (QTY_VORTEX_LAT, QTY_VORTEX_LON, QTY_VORTEX_PMIN, QTY_VORTEX_WMAX)
       call vortex()
    case (QTY_GEOPOTENTIAL_HEIGHT)
@@ -1356,6 +1360,30 @@ end function model_rho_t
 
 
 !------------------------------------------------------------------
+function density_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+
+integer,             intent(in) :: ens_size
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: qty
+integer,             intent(in) :: id
+integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
+real(r8),            intent(in) :: dxm, dx, dy, dym
+real(r8) :: density_interpolate(ens_size)
+
+real(r8), dimension(ens_size) :: rho1, rho2, rho3, rho4
+
+rho1 = model_rho_t(ll(1), ll(2), k, id, state_handle, ens_size)
+rho2 = model_rho_t(lr(1), lr(2), k, id, state_handle, ens_size)
+rho3 = model_rho_t(ul(1), ul(2), k, id, state_handle, ens_size)
+rho4 = model_rho_t(ur(1), ur(2), k, id, state_handle, ens_size)
+
+density_interpolate = dym*( dxm*rho1(:) + dx*rho2(:) ) + dy*( dxm*rho3(:) + dx*rho4(:) )
+
+end function density_interpolate
+
+!------------------------------------------------------------------
+
 
 function temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
@@ -1371,7 +1399,7 @@ real(r8) :: temperature_interpolate(ens_size)
 real(r8), dimension(ens_size) :: a1, pres, pres1, pres2, pres3, pres4
 
 ! In terms of perturbation potential temperature
-a1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dy)
+a1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
 pres1 = model_pressure_t(ll(1), ll(2), k, id, state_handle, ens_size)
 pres2 = model_pressure_t(lr(1), lr(2), k, id, state_handle, ens_size)
@@ -1384,7 +1412,56 @@ pres = dym*( dxm*pres1 + dx*pres2 ) + dy*( dxm*pres3 + dx*pres4 )
 ! Full sensible temperature field
 temperature_interpolate = (ts0 + a1(:))*(pres(:)/ps0)**kappa
 
-end function
+end function temperature_interpolate
+
+!------------------------------------------------------------------
+
+function pressure_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+
+integer,             intent(in) :: ens_size
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: qty
+integer,             intent(in) :: id
+integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
+real(r8),            intent(in) :: dxm, dx, dy, dym
+real(r8) :: pressure_interpolate(ens_size)
+
+real(r8), dimension(ens_size) :: a1, pres, pres1, pres2, pres3, pres4
+
+! In terms of perturbation potential temperature
+a1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+
+pres1 = model_pressure_t(ll(1), ll(2), k, id, state_handle, ens_size)
+pres2 = model_pressure_t(lr(1), lr(2), k, id, state_handle, ens_size)
+pres3 = model_pressure_t(ul(1), ul(2), k, id, state_handle, ens_size)
+pres4 = model_pressure_t(ur(1), ur(2), k, id, state_handle, ens_size)
+
+! Pressure at location
+pres = dym*( dxm*pres1 + dx*pres2 ) + dy*( dxm*pres3 + dx*pres4 )
+
+end function pressure_interpolate
+
+!------------------------------------------------------------------
+
+function specific_humidity_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+
+integer,             intent(in) :: ens_size
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: qty
+integer,             intent(in) :: id
+integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
+real(r8),            intent(in) :: dxm, dx, dy, dym
+real(r8) :: specific_humidity_interpolate(ens_size)
+
+real(r8), dimension(ens_size) :: a1
+
+a1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+
+specific_humidity_interpolate = a1(:) /(1.0_r8 + a1(:))
+
+end function specific_humidity_interpolate
 
 !------------------------------------------------------------------
 ! If there are other domains in the state:
