@@ -201,6 +201,7 @@ type static_data
    real(r8), allocatable :: mub(:,:)   ! base state dry air mass in column
    real(r8), allocatable :: hgt(:,:)   ! Terrain Height
    real(r8), allocatable :: dnw(:)     ! d(eta) values between full (w) level
+   real(r8), allocatable :: land(:,:)  ! land mask (1 for land, 2 for water)
 end type static_data
 
 ! need grid for each domain
@@ -398,16 +399,18 @@ select case (qty)
    case (QTY_VORTEX_LAT, QTY_VORTEX_LON, QTY_VORTEX_PMIN, QTY_VORTEX_WMAX)
       call vortex()
    case (QTY_GEOPOTENTIAL_HEIGHT)
-      print*, 'Do some geopotential height'
+      print*, 'Do you need to adjust zloc = zloc+0.5_r8?'
+      fld_k1 = geopotential_height_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+      fld_k2 = geopotential_height_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case (QTY_SURFACE_ELEVATION)
-      print*, 'Do some surface elevation'
+      fld_k1 = surface_elevation_interpolate(ens_size, id, ll, ul, lr, ur, dxm, dx, dy, dym)
    case (QTY_SKIN_TEMPERATURE)
-      print*, 'skin temp is just a surface obs'
+      fld_k1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case (QTY_SURFACE_TYPE)
-      print*, 'Do some surface type' ! Need LAND MASK also?
+      fld_k1(:) = surface_type_interpolate(ens_size, id, ll, ul, lr, ur, dxm, dx, dy, dym)
    case default ! simple interpolation
-      fld_k1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym) ! level k
-      fld_k2(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym) ! level k+1
+      fld_k1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+      fld_k2(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym) 
 end select
 
 ! interpolate vertically
@@ -867,6 +870,10 @@ do i = 1, num_domains
    call nc_get_variable_size(ncid, 'DNW', dim_size)
    allocate(stat_dat(i)%dnw(dim_size(1)))
    call nc_get_variable(ncid, 'DNW', stat_dat(i)%dnw, routine)
+
+   call nc_get_variable_size(ncid, 'XLAND', dim_size)
+   allocate(stat_dat(i)%land(dim_size(1), dim_size(2)))
+   call nc_get_variable(ncid, 'XLAND', stat_dat(i)%land, routine)
 
    call nc_close_file(ncid, routine)
 
@@ -1381,6 +1388,68 @@ rho4 = model_rho_t(ur(1), ur(2), k, id, state_handle, ens_size)
 density_interpolate = dym*( dxm*rho1(:) + dx*rho2(:) ) + dy*( dxm*rho3(:) + dx*rho4(:) )
 
 end function density_interpolate
+
+!------------------------------------------------------------------
+! wrfinput land mask XLAND  1 = land, 2 = water
+! obs_def_rttov_mod 0 = land, 1 = water, 2 = sea ice
+function surface_type_interpolate(ens_size, id, ll, ul, lr, ur, dxm, dx, dy, dym)
+
+integer,             intent(in) :: ens_size
+integer,             intent(in) :: id
+integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+real(r8),            intent(in) :: dxm, dx, dy, dym
+real(r8) :: surface_type_interpolate(ens_size) ! same across the ensemble
+
+surface_type_interpolate(:) = -1 + dym*( dxm*stat_dat(id)%land(ll(1), ll(2))      + &
+                                         dx*stat_dat(id)%land(lr(1), lr(2)) )     + &
+                                         dy*( dxm*stat_dat(id)%land(ul(1), ul(2)) + &
+                                         dx*stat_dat(id)%land(ur(1), ur(2)) )
+
+end function surface_type_interpolate
+
+!------------------------------------------------------------------
+
+function surface_elevation_interpolate(ens_size, id, ll, ul, lr, ur, dxm, dx, dy, dym)
+
+integer,             intent(in) :: ens_size
+integer,             intent(in) :: id
+integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+real(r8),            intent(in) :: dxm, dx, dy, dym
+real(r8) :: surface_elevation_interpolate(ens_size)
+
+surface_elevation_interpolate(:) = dym*( dxm*stat_dat(id)%hgt(ll(1), ll(2))      + &
+                                         dx*stat_dat(id)%hgt(lr(1), lr(2)) )     + &
+                                         dy*( dxm*stat_dat(id)%hgt(ul(1), ul(2)) + &
+                                         dx*stat_dat(id)%hgt(ur(1), ur(2)) )
+
+end function surface_elevation_interpolate
+
+!------------------------------------------------------------------
+
+function geopotential_height_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+
+integer,             intent(in) :: ens_size
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: qty
+integer,             intent(in) :: id
+integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
+real(r8),            intent(in) :: dxm, dx, dy, dym
+real(r8) :: geopotential_height_interpolate(ens_size)
+
+real(r8), dimension(ens_size) :: a1
+
+! In terms of perturbation potential temperature
+a1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+
+! phb is constant across the ensemble, so use k(1)
+geopotential_height_interpolate = ( a1 + &
+                                    dym* ( dxm*stat_dat(id)%phb(ll(1), ll(2), k(1) ) + &
+                                    dx * stat_dat(id)%phb(lr(1), lr(2), k(1)) )      + &
+                                    dy * ( dxm*stat_dat(id)%phb(ul(1), ul(2), k(1) ) + &
+                                    dx * stat_dat(id)%phb(ur(1), ur(2), k(1)) )          )  / gravity
+
+end function geopotential_height_interpolate
 
 !------------------------------------------------------------------
 
