@@ -194,6 +194,11 @@ type grid_ll
   integer :: bt ! bottom-top number of grid points
   integer :: bt_stag
 
+  ! wrf options, apply to domain 1 only.
+  logical :: polar = .false.
+  logical :: periodic_x = .false.
+  logical :: periodic_y = .false.
+
 end type grid_ll
 
 type static_data
@@ -836,6 +841,16 @@ do i = 1, num_domains
     call nc_close_file(ncid, routine)
 
     call setup_map_projection(i)
+
+    if (i == 1) then
+       grid(i)%periodic_x = periodic_x
+       grid(i)%periodic_y = periodic_y
+       grid(i)%polar = polar
+    else
+       grid(i)%periodic_x = .false.
+       grid(i)%periodic_y = .false.
+       grid(i)%polar = .false.
+    endif
 
 enddo
 
@@ -1820,8 +1835,13 @@ integer, intent(in)  :: i, j, id, qty
 integer, dimension(2), intent(out) :: ll, ul, lr, ur ! (x,y) of each corner
 integer, intent(out) :: rc
 
+integer :: var_id
+
 ! set return code to 0, and change this if necessary
 rc = 0
+
+var_id = get_varid_from_kind(wrf_dom(id), qty)
+
 
 !----------------
 ! LOWER LEFT ll
@@ -1835,27 +1855,27 @@ rc = 0
 
 ! As of 22 Oct 2007, this option is not allowed!
 !   Note that j = 0 can only happen if we are on the M (or U) wrt to latitude
-!!!if ( wrf%dom(id)%polar .and. j == 0 .and. .not. restrict_polar ) then
-!!!
-!!!   ! j = 0 should be mapped to j = 1 (ll is on other side of globe)
-!!!   ll(2) = 1
-!!!   
-!!!   ! Need to map i index 180 degrees away
-!!!   ll(1) = i + wrf%dom(id)%we/2
-!!!   
-!!!   ! Check validity of bounds & adjust by periodicity if necessary
-!!!   if ( ll(1) > wrf%dom(id)%we ) ll(1) = ll(1) - wrf%dom(id)%we
-!!!
-!!!   ! We shouldn't be able to get this return code if restrict_polar = .true.
-!!!    rc = 1
-!!!    print*, 'model_mod.f90 :: getCorners :: Tried to do polar bc -- rc = ', rc
-!!!
-!!!else
-!!!   
-!!!   ll(1) = i
-!!!   ll(2) = j
-!!!
-!!!endif
+if ( grid(id)%polar .and. j == 0 .and. .not. restrict_polar ) then
+
+   ! j = 0 should be mapped to j = 1 (ll is on other side of globe)
+   ll(2) = 1
+   
+   ! Need to map i index 180 degrees away
+   ll(1) = i + grid(id)%we/2
+   
+   ! Check validity of bounds & adjust by periodicity if necessary
+   if ( ll(1) > grid(id)%we ) ll(1) = ll(1) - grid(id)%we
+
+   ! We shouldn't be able to get this return code if restrict_polar = .true.
+    rc = 1
+    print*, 'model_mod.f90 :: getCorners :: Tried to do polar bc -- rc = ', rc
+
+else
+   
+   ll(1) = i
+   ll(2) = j
+
+endif
 
 
 !----------------
@@ -1877,30 +1897,30 @@ rc = 0
 !     ind = [1 we)    ==> ind_p_1 = ind + 1
 !     ind = [we wes)  ==> ind_p_1 = wes
 
-!!!if ( wrf%dom(id)%periodic_x ) then
-!!!  
-!!!   ! Check to see what grid we have, M vs. U
-!!!   if ( wrf%dom(id)%var_size(1,type) == wrf%dom(id)%wes ) then
-!!!      ! U-grid is always i+1 -- do this in reference to already adjusted ll points
-!!!      lr(1) = ll(1) + 1
-!!!      lr(2) = ll(2)
-!!!   else
-!!!      ! M-grid is i+1 except if we <= ind < wes, in which case it's 1
-!!!      if ( i < wrf%dom(id)%we ) then
-!!!         lr(1) = ll(1) + 1
-!!!      else
-!!!         lr(1) = 1
-!!!      endif
-!!!      lr(2) = ll(2)
-!!!   endif
-!!!
-!!!else
-!!!
-!!!   ! Regardless of grid, NOT Periodic always has i+1
-!!!   lr(1) = ll(1) + 1
-!!!   lr(2) = ll(2)
-!!!
-!!!endif
+if ( grid(id)%periodic_x ) then
+  
+   ! Check to see what grid we have, M vs. U
+   if (on_u_grid(wrf_dom(id), var_id) ) then
+      ! U-grid is always i+1 -- do this in reference to already adjusted ll points
+      lr(1) = ll(1) + 1
+      lr(2) = ll(2)
+   else
+      ! M-grid is i+1 except if we <= ind < wes, in which case it's 1
+      if ( i < grid(id)%we ) then
+         lr(1) = ll(1) + 1
+      else
+         lr(1) = 1
+      endif
+      lr(2) = ll(2)
+   endif
+
+else
+
+  ! Regardless of grid, NOT Periodic always has i+1
+   lr(1) = ll(1) + 1
+   lr(2) = ll(2)
+
+endif
       
 
 !----------------
@@ -1931,76 +1951,76 @@ rc = 0
 ! Hence, with our current polar obs restrictions, all four possible cases DO map into
 !   ul = (i,j+1).  But this will not always be the case.
 
-!!!if ( wrf%dom(id)%polar ) then
-!!!
-!!!   ! Check to see what grid we have, M vs. V
-!!!   if ( wrf%dom(id)%var_size(2,type) == wrf%dom(id)%sns ) then
-!!!      ! V-grid is always j+1, even if we allow for full [1 sns) range
-!!!      ul(1) = ll(1)
-!!!      ul(2) = ll(2) + 1
-!!!   else
-!!!      ! M-grid changes depending on polar restriction
-!!!      if ( restrict_polar ) then
-!!!         ! If restricted, then we can simply add 1
-!!!         ul(1) = ll(1)
-!!!         ul(2) = ll(2) + 1
-!!!      else
-!!!         ! If not restricted, then we can potentially wrap over the north pole, which
-!!!         !   means that ul(2) is set to sn and ul(1) is shifted by 180 deg.
-!!!
-!!!         if ( j == wrf%dom(id)%sn ) then
-!!!            ! j > sn should be mapped to j = sn (ul is on other side of globe)
-!!!            ul(2) = wrf%dom(id)%sn
-!!!   
-!!!            ! Need to map i index 180 degrees away
-!!!            ul(1) = ll(1) + wrf%dom(id)%we/2
-!!!   
-!!!            ! Check validity of bounds & adjust by periodicity if necessary
-!!!            if ( ul(1) > wrf%dom(id)%we ) ul(1) = ul(1) - wrf%dom(id)%we
-!!!
-!!!            ! We shouldn't be able to get this return code if restrict_polar = .true.
-!!!             rc = 1
-!!!             print*, 'model_mod.f90 :: getCorners :: Tried to do polar bc -- rc = ', rc
-!!!
-!!!         elseif ( j == 0 ) then
-!!!            ! In this case, we have place ll on the other side of the globe, so we
-!!!            !   cannot reference ul to ll
-!!!            ul(1) = i
-!!!            ul(2) = 1
-!!!
-!!!         else
-!!!            ! We can confidently set to j+1
-!!!            ul(1) = ll(1)
-!!!            ul(2) = ll(2) + 1
-!!!         endif
-!!!
-!!!      endif
-!!!   endif
-!!!
-!!!elseif ( wrf%dom(id)%periodic_y ) then
-!!!
-!!!   ! Check to see what grid we have, M vs. U
-!!!   if ( wrf%dom(id)%var_size(2,type) == wrf%dom(id)%sns ) then
-!!!      ! V-grid is always j+1 -- do this in reference to already adjusted ll points
-!!!      ul(1) = ll(1)
-!!!      ul(2) = ll(2)+1
-!!!   else
-!!!      ! M-grid is j+1 except if we <= ind < wes, in which case it's 1
-!!!      if ( j < wrf%dom(id)%sn ) then
-!!!         ul(2) = ll(2) + 1
-!!!      else
-!!!         ul(2) = 1
-!!!      endif
-!!!      ul(1) = ll(1)
-!!!   endif
-!!!
-!!!else
-!!!
-!!!   ! Regardless of grid, NOT Periodic always has j+1
-!!!   ul(1) = ll(1)
-!!!   ul(2) = ll(2) + 1
-!!!
-!!!endif
+if ( grid(id)%polar ) then
+
+   ! Check to see what grid we have, M vs. V
+   if ( on_v_grid(wrf_dom(id), var_id) ) then
+      ! V-grid is always j+1, even if we allow for full [1 sns) range
+      ul(1) = ll(1)
+      ul(2) = ll(2) + 1
+   else
+      ! M-grid changes depending on polar restriction
+      if ( restrict_polar ) then
+         ! If restricted, then we can simply add 1
+         ul(1) = ll(1)
+         ul(2) = ll(2) + 1
+      else
+         ! If not restricted, then we can potentially wrap over the north pole, which
+         !   means that ul(2) is set to sn and ul(1) is shifted by 180 deg.
+
+         if ( j == grid(id)%sn ) then
+            ! j > sn should be mapped to j = sn (ul is on other side of globe)
+            ul(2) = grid(id)%sn
+   
+            ! Need to map i index 180 degrees away
+            ul(1) = ll(1) + grid(id)%we/2
+   
+            ! Check validity of bounds & adjust by periodicity if necessary
+            if ( ul(1) > grid(id)%we ) ul(1) = ul(1) - grid(id)%we
+
+            ! We shouldn't be able to get this return code if restrict_polar = .true.
+             rc = 1
+             print*, 'model_mod.f90 :: getCorners :: Tried to do polar bc -- rc = ', rc
+
+         elseif ( j == 0 ) then
+            ! In this case, we have place ll on the other side of the globe, so we
+            !   cannot reference ul to ll
+            ul(1) = i
+            ul(2) = 1
+
+         else
+            ! We can confidently set to j+1
+            ul(1) = ll(1)
+            ul(2) = ll(2) + 1
+         endif
+
+      endif
+   endif
+
+elseif ( grid(id)%periodic_y ) then
+
+   ! Check to see what grid we have, M vs. V
+   if ( on_v_grid(wrf_dom(id), var_id) ) then
+      ! V-grid is always j+1 -- do this in reference to already adjusted ll points
+      ul(1) = ll(1)
+      ul(2) = ll(2)+1
+   else
+      ! M-grid is j+1 except if we <= ind < wes, in which case it's 1
+      if ( j < grid(id)%sn ) then
+         ul(2) = ll(2) + 1
+      else
+         ul(2) = 1
+      endif
+      ul(1) = ll(1)
+   endif
+
+else
+
+   ! Regardless of grid, NOT Periodic always has j+1
+   ul(1) = ll(1)
+   ul(2) = ll(2) + 1
+
+endif
    
 
 !----------------
@@ -2019,54 +2039,54 @@ rc = 0
 !   the polar boundary condition.  There are no situations where ur(2) will not be equal to
 !   ul(2).
 
-!!!ur(2) = ul(2)
-!!!
-!!!! Need to check if ur(1) .ne. lr(1)
-!!!if ( wrf%dom(id)%polar .and. .not. restrict_polar ) then
-!!!
-!!!   ! Only if j == 0 or j == sn
-!!!   if ( j == 0 .or. j ==  wrf%dom(id)%sn) then
-!!!      ! j == 0 means that ll(1) = i + 180 deg, so we cannot use lr(1) -- hence, we will
-!!!      !   add 1 to ul(1), unless doing so spans the longitude seam point.
-!!!      ! j == sn means that ul(1) = i + 180 deg.  Here we cannot use lr(1) either because
-!!!      !   it will be half a domain away from ul(1)+1.  Be careful of longitude seam point.
-!!!
-!!!      !   Here we need to check longitude periodicity and the type of grid
-!!!      if ( wrf%dom(id)%periodic_x ) then
-!!!  
-!!!         ! Check to see what grid we have, M vs. U
-!!!         if ( wrf%dom(id)%var_size(1,type) == wrf%dom(id)%wes ) then
-!!!            ! U-grid is always i+1 -- do this in reference to already adjusted ll points
-!!!            ur(1) = ul(1) + 1
-!!!         else
-!!!            ! M-grid is i+1 except if we <= ind < wes, in which case it's 1
-!!!            if ( ul(1) < wrf%dom(id)%we ) then
-!!!               ur(1) = ul(1) + 1
-!!!            else
-!!!               ur(1) = 1
-!!!            endif
-!!!         endif
-!!!
-!!!      else
-!!!
-!!!         ! Regardless of grid, NOT Periodic always has i+1
-!!!         ur(1) = ul(1) + 1
-!!!
-!!!      endif
-!!!
-!!!   ! If not a special j value, then we are set for the ur(1) = lr(1)
-!!!   else
-!!!
-!!!      ur(1) = lr(1)
-!!!
-!!!   endif
-!!!
-!!!! If not an unrestricted polar periodic domain, then we have nothing to worry about
-!!!else
-!!!
-!!!   ur(1) = lr(1)
-!!!
-!!!endif
+ur(2) = ul(2)
+
+! Need to check if ur(1) .ne. lr(1)
+if ( grid(id)%polar .and. .not. restrict_polar ) then
+
+   ! Only if j == 0 or j == sn
+   if ( j == 0 .or. j ==  grid(id)%sn) then
+      ! j == 0 means that ll(1) = i + 180 deg, so we cannot use lr(1) -- hence, we will
+      !   add 1 to ul(1), unless doing so spans the longitude seam point.
+      ! j == sn means that ul(1) = i + 180 deg.  Here we cannot use lr(1) either because
+      !   it will be half a domain away from ul(1)+1.  Be careful of longitude seam point.
+
+      !   Here we need to check longitude periodicity and the type of grid
+      if ( grid(id)%periodic_x ) then
+  
+         ! Check to see what grid we have, M vs. U
+         if ( on_u_grid(wrf_dom(id), var_id) ) then
+            ! U-grid is always i+1 -- do this in reference to already adjusted ll points
+            ur(1) = ul(1) + 1
+         else
+            ! M-grid is i+1 except if we <= ind < wes, in which case it's 1
+            if ( ul(1) < grid(id)%we ) then
+               ur(1) = ul(1) + 1
+            else
+               ur(1) = 1
+            endif
+         endif
+
+      else
+
+         ! Regardless of grid, NOT Periodic always has i+1
+         ur(1) = ul(1) + 1
+
+      endif
+
+   ! If not a special j value, then we are set for the ur(1) = lr(1)
+   else
+
+      ur(1) = lr(1)
+
+   endif
+
+! If not an unrestricted polar periodic domain, then we have nothing to worry about
+else
+
+   ur(1) = lr(1)
+
+endif
 
 end subroutine getCorners
 
