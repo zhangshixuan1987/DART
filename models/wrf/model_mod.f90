@@ -410,7 +410,7 @@ select case (qty)
       fld_k1(:) = surface_type_interpolate(ens_size, id, ll, ul, lr, ur, dxm, dx, dy, dym)
    case default ! simple interpolation
       fld_k1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
-      fld_k2(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym) 
+      fld_k2(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
 end select
 
 ! interpolate vertically
@@ -1047,8 +1047,8 @@ if (var_id > 0) then ! surface pressure in domain so get v_p(0,:) from surface p
 
 else !extrapolate v_p(0:,) from pressure level 2 and v_p(1:,:)
 
-  v_p(0,:) = interp_4pressure(lev2_pres1(:), lev2_pres2(:), lev2_pres3(:), lev2_pres4(:), dx, dxm, dy, dym, ens_size, &
-                                       extrapolate=.true., edgep=v_p(1,:))
+  v_p(0,:) = extrap_4pressure(lev2_pres1(:), lev2_pres2(:), lev2_pres3(:), lev2_pres4(:), dx, dxm, dy, dym, ens_size, &
+                              edgep=v_p(1,:))
 
  endif
 
@@ -1251,41 +1251,21 @@ end subroutine height_to_zk
 
 !------------------------------------------------------------------
 
-function interp_4pressure(p1, p2, p3, p4, dx, dxm, dy, dym, ens_size, extrapolate, edgep)
+function interp_4pressure(p1, p2, p3, p4, dx, dxm, dy, dym, ens_size)
  
 ! given 4 corners of a quad, where the p1, p2, p3 and p4 points are
 ! respectively:  lower left, lower right, upper left, upper right
 ! and dx is the distance in x, dxm is 1.0-dx, dy is distance in y
 ! and dym is 1.0-dy, interpolate the pressure while converted to log.
-! if extrapolate is true, extrapolate where edgep is the edge pressure
-! and the 4 points and dx/dy give the location of the inner point.
 
 integer, intent(in)                :: ens_size
 real(r8), intent(in)               :: p1(ens_size), p2(ens_size), p3(ens_size), p4(ens_size)
 real(r8), intent(in)               :: dx, dxm, dy, dym
-logical,  intent(in), optional     :: extrapolate
-real(r8), intent(in), optional     :: edgep(ens_size)
 real(r8)                           :: interp_4pressure(ens_size)
 
-logical  :: do_interp
-real(r8) :: intermediate(ens_size)
 real(r8) :: l1(ens_size), l2(ens_size), l3(ens_size), l4(ens_size)
 
 integer :: i
-
-! default is to do interpolation; only extrapolate if the optional
-! arg is specified and if it is true.  for extrapolation 'edgep' is
-! required; it is unused for interpolation.
-do_interp = .true.
-if (present(extrapolate)) then
-   if (extrapolate) do_interp = .false.
-endif
-
-! TODO split this routine into two, interpolate and extrapolate
-if (.not. do_interp .and. .not. present(edgep)) then
-  call error_handler(E_ERR, 'interp_4pressure:', &
-      'edgep must be specified for extrapolation.  internal error.')
-endif
 
 if (log_horz_interpQ) then
    l1 = log(p1)
@@ -1294,34 +1274,57 @@ if (log_horz_interpQ) then
    l4 = log(p4)
 endif
 
-
 ! once we like the results, remove the log_horz_interpQ test.
-if (do_interp) then
-   if (log_horz_interpQ) then
-      interp_4pressure = exp(dym*( dxm*l1 + dx*l2 ) + dy*( dxm*l3 + dx*l4 ))
-   else
-      interp_4pressure = dym*( dxm*p1 + dx*p2 ) + dy*( dxm*p3 + dx*p4 )
-   endif
+if (log_horz_interpQ) then
+   interp_4pressure = exp(dym*( dxm*l1 + dx*l2 ) + dy*( dxm*l3 + dx*l4 ))
 else
-   if (log_horz_interpQ) then
-      intermediate = (3.0_r8*log(edgep) - &
-                 dym*( dxm*l1 + dx*l2 ) - dy*( dxm*l3 + dx*l4 ))/2.0_r8
-
-      do i = 1, size(intermediate)
-         if (intermediate(i) <= 0.0_r8) then
-            interp_4pressure(i) = edgep(i)
-         else
-            interp_4pressure(i) = exp(intermediate(i))
-         endif
-      enddo
-   else
-      interp_4pressure = (3.0_r8*edgep - &
-                 dym*( dxm*p1 + dx*p2 ) - dy*( dxm*p3 + dx*p4 ))/2.0_r8
-   endif
+   interp_4pressure = dym*( dxm*p1 + dx*p2 ) + dy*( dxm*p3 + dx*p4 )
 endif
 
 end function interp_4pressure
 
+!------------------------------------------------------------------
+
+function extrap_4pressure(p1, p2, p3, p4, dx, dxm, dy, dym, ens_size, edgep)
+ 
+! given 4 corners of a quad, where the p1, p2, p3 and p4 points are
+! respectively:  lower left, lower right, upper left, upper right
+! and dx is the distance in x, dxm is 1.0-dx, dy is distance in y
+! and dym is 1.0-dy, extrapolate where edgep is the edge pressure
+! and the 4 points and dx/dy give the location of the inner point.
+
+integer, intent(in)                :: ens_size
+real(r8), intent(in)               :: p1(ens_size), p2(ens_size), p3(ens_size), p4(ens_size)
+real(r8), intent(in)               :: dx, dxm, dy, dym
+real(r8), intent(in)               :: edgep(ens_size)
+real(r8)                           :: extrap_4pressure(ens_size)
+
+real(r8) :: intermediate(ens_size)
+real(r8) :: l1(ens_size), l2(ens_size), l3(ens_size), l4(ens_size)
+
+if (log_horz_interpQ) then
+   l1 = log(p1)
+   l2 = log(p2)
+   l3 = log(p3)
+   l4 = log(p4)
+endif
+
+! once we like the results, remove the log_horz_interpQ test.
+if (log_horz_interpQ) then
+   intermediate = (3.0_r8*log(edgep) - &
+              dym*( dxm*l1 + dx*l2 ) - dy*( dxm*l3 + dx*l4 ))/2.0_r8
+   
+   where (intermediate <= 0.0_r8)
+      extrap_4pressure = edgep
+   else where
+       extrap_4pressure = exp(intermediate)
+   end where
+else
+      extrap_4pressure = (3.0_r8*edgep - &
+              dym*( dxm*p1 + dx*p2 ) - dy*( dxm*p3 + dx*p4 ))/2.0_r8
+endif
+
+end function extrap_4pressure
 
 !------------------------------------------------------------------
 function model_rho_t(i,j,k,id,state_handle, ens_size)
