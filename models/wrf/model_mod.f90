@@ -1777,58 +1777,47 @@ if (id > 1) then
 
 else ! have to check periodic
 
-print*, 'not checking periodic'
-found_in_domain = ( i >= 1.0_r8 .and. i <= real(grid(id)%we,r8) .and. &
-                    j >= 1.0_r8 .and. j <= real(grid(id)%sn,r8) )
-
-endif
-
 ! Array bound checking depends on whether periodic or not -- these are
 !   real-valued indices here, so we cannot use boundsCheck  :(
 
-!if ( wrf%dom(id)%periodic_x .and. .not. wrf%dom(id)%periodic_y  ) then
-!   if ( wrf%dom(id)%polar ) then
-!      !   Periodic     X & M_grid ==> [1 we+1)
-!      !   Periodic     Y & M_grid ==> [0.5 sn+0.5]
-!      if ( iloc >= 1.0_r8 .and. iloc <  real(wrf%dom(id)%we,r8)+1.0_r8 .and. &
-!           jloc >= 0.5_r8 .and. jloc <= real(wrf%dom(id)%sn,r8)+0.5_r8 ) &
-!           dom_found = .true.
-!   else
-!      !   Periodic     X & M_grid ==> [1 we+1)
-!      !   NOT Periodic Y & M_grid ==> [1 sn]
-!      if ( iloc >= 1.0_r8 .and. iloc <  real(wrf%dom(id)%we,r8)+1.0_r8 .and. &
-!           jloc >= 1.0_r8 .and. jloc <= real(wrf%dom(id)%sn,r8) ) &
-!           dom_found = .true.
-!   endif
-!
-!elseif ( wrf%dom(id)%periodic_x .and. wrf%dom(id)%periodic_y ) then
-!      !   Periodic     X & M_grid ==> [1 we+1)
-!      !   Periodic     Y & M_grid ==> [1 sn+1]
-!      if ( iloc >= 1.0_r8 .and. iloc <  real(wrf%dom(id)%we,r8)+1.0_r8 .and. &
-!           jloc >= 1.0_r8 .and. jloc <= real(wrf%dom(id)%sn,r8)+1.0_r8 ) &
-!           dom_found = .true.
-!
-!else
-!   if ( wrf%dom(id)%polar ) then
-!      !   NOT Periodic X & M_grid ==> [1 we]
-!      !   Periodic     Y & M_grid ==> [0.5 sn+0.5]
-!      if ( iloc >= 1.0_r8 .and. iloc <= real(wrf%dom(id)%we,r8) .and. &
-!           jloc >= 0.5_r8 .and. jloc <= real(wrf%dom(id)%sn,r8)+0.5_r8 ) &
-!           dom_found = .true.
-!   else
-!      !   NOT Periodic X & M_grid ==> [1 we]
-!      !   NOT Periodic Y & M_grid ==> [1 sn]
-!      if ( iloc >= 1.0_r8 .and. iloc <= real(wrf%dom(id)%we,r8) .and. &
-!           jloc >= 1.0_r8 .and. jloc <= real(wrf%dom(id)%sn,r8) ) &
-!           dom_found = .true.
-!   endif
-!endif
+   if ( grid(id)%periodic_x .and. .not. grid(id)%periodic_y  ) then
+      if ( grid(id)%polar ) then
+         !   Periodic     X & M_grid ==> [1 we+1)
+         !   Periodic     Y & M_grid ==> [0.5 sn+0.5]
+         found_in_domain = ( i >= 1.0_r8 .and. i <  real(grid(id)%we,r8)+1.0_r8 .and. &
+                             j >= 0.5_r8 .and. j <= real(grid(id)%sn,r8)+0.5_r8 )
+      else
+         !   Periodic     X & M_grid ==> [1 we+1)
+         !   NOT Periodic Y & M_grid ==> [1 sn]
+         found_in_domain = ( i >= 1.0_r8 .and. i <  real(grid(id)%we,r8)+1.0_r8 .and. &
+                             j >= 1.0_r8 .and. j <= real(grid(id)%sn,r8) )
+      endif
+   
+   elseif ( grid(id)%periodic_x .and. grid(id)%periodic_y ) then
+         !   Periodic     X & M_grid ==> [1 we+1)
+         !   Periodic     Y & M_grid ==> [1 sn+1]
+         found_in_domain = ( i >= 1.0_r8 .and. i <  real(grid(id)%we,r8)+1.0_r8 .and. &
+                             j >= 1.0_r8 .and. j <= real(grid(id)%sn,r8)+1.0_r8 )
+   
+   else
+      if ( grid(id)%polar ) then
+         !   NOT Periodic X & M_grid ==> [1 we]
+         !   Periodic     Y & M_grid ==> [0.5 sn+0.5]
+         found_in_domain = ( i >= 1.0_r8 .and. i <= real(grid(id)%we,r8) .and. &
+                             j >= 0.5_r8 .and. j <= real(grid(id)%sn,r8)+0.5_r8 )
+      else
+         !   NOT Periodic X & M_grid ==> [1 we]
+         !   NOT Periodic Y & M_grid ==> [1 sn]
+         found_in_domain = ( i >= 1.0_r8 .and. i <= real(grid(id)%we,r8) .and. &
+                             j >= 1.0_r8 .and. j <= real(grid(id)%sn,r8) )
+      endif
+   endif
+endif
 
 
 end function found_in_domain
 
 !------------------------------------------------------------------
-! This is mass grid corners
 subroutine getCorners(i, j, id, qty, ll, ul, lr, ur, rc)
 
 integer, intent(in)  :: i, j, id, qty
