@@ -981,7 +981,7 @@ select case (which_vert)
    case(VERTISHEIGHT)
       call get_model_height_profile(ll, ul, lr, ur, dx, dy, dxm, dym, id, v_h, state_handle, ens_size)
       do e = 1, ens_size
-         call height_to_zk(lon_lat_vert(3), v_h(:, e), grid(id)%bt, zloc(e), lev0)
+         call height_to_zk(lon_lat_vert(3), v_h(:, e), grid(id)%bt, zloc(e), level_below(e), lev0)
          if (lev0) then
             print*, "height obs below lowest sigma"
                fail = .true.
@@ -997,8 +997,6 @@ select case (which_vert)
    case default
        fail = .true.
 end select
-
-print*, 'not done bounding levels'
 
 end subroutine get_bounding_levels
 
@@ -1225,7 +1223,7 @@ end subroutine get_model_height_profile
 
 !------------------------------------------------------------------
 
-subroutine height_to_zk(obs_v, mdl_v, n3, zk, lev0)
+subroutine height_to_zk(obs_v, mdl_v, n3, zk, level_below, lev0)
 
 ! Calculate the model level "zk" on half (mass) levels,
 ! corresponding to height "obs_v".
@@ -1234,6 +1232,7 @@ real(r8), intent(in)  :: obs_v
 integer,  intent(in)  :: n3
 real(r8), intent(in)  :: mdl_v(0:n3)
 real(r8), intent(out) :: zk
+integer,  intent(out)  :: level_below
 logical,  intent(out) :: lev0
 
 integer   :: k
@@ -1241,6 +1240,7 @@ integer   :: k
 zk = missing_r8
 lev0 = .false.
 
+! HK todo: explicit fail vs. missing r8
 ! if out of range completely, return missing_r8 and lev0 false
 if (obs_v < mdl_v(0) .or. obs_v > mdl_v(n3)) return
 
@@ -1248,6 +1248,7 @@ if (obs_v < mdl_v(0) .or. obs_v > mdl_v(n3)) return
 ! height value but set lev0 true
 if(obs_v >= mdl_v(0) .and. obs_v < mdl_v(1)) then
   lev0 = .true.
+  level_below = 1
   zk = (mdl_v(0) - obs_v)/(mdl_v(0) - mdl_v(1))
   return
 endif
@@ -1256,6 +1257,7 @@ endif
 ! as a real number, including the fraction between the levels.
 do k = 1,n3-1
    if(obs_v >= mdl_v(k) .and. obs_v <= mdl_v(k+1)) then
+      level_below = k
       zk = real(k) + (mdl_v(k) - obs_v)/(mdl_v(k) - mdl_v(k+1))
       exit
    endif
