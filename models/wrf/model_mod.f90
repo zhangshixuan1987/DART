@@ -1205,13 +1205,12 @@ do k = 1, grid(id)%bt_stag  ! geopotential height (PH) is on bottom_top_stag
               grid(id)%latitude(ul(1),ul(2)) + &
               grid(id)%latitude(ur(1),ur(2)) ) / 4.0_r8
 
-
-end do
-
-do k = 1, grid(id)%bt
    do e = 1, ens_size
       fll(k, e) = compute_geometric_height(geop(e), lat(e))
    enddo
+end do
+
+do k = 1, grid(id)%bt
    v_h(k, :) = 0.5_r8*(fll(k, :) + fll(k+1, :) )
 end do
 
