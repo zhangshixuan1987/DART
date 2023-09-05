@@ -420,6 +420,7 @@ end select
 
 ! interpolate vertically
 expected_obs(:) = vertical_interpolation(ens_size, k, zloc, fld_k1, fld_k2)
+istatus(:) = 0
 
 end subroutine model_interpolate
 
@@ -1519,7 +1520,6 @@ real(r8) :: pressure_interpolate(ens_size)
 
 real(r8), dimension(ens_size) :: a1, pres, pres1, pres2, pres3, pres4
 
-! In terms of perturbation potential temperature
 a1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
 pres1 = model_pressure_t(ll(1), ll(2), k, id, state_handle, ens_size)
