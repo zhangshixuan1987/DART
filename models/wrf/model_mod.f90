@@ -347,8 +347,6 @@ which_vert = nint(query_location(location))
 lon_lat_vert = get_location(location)
 call get_domain_info(lon_lat_vert(1),lon_lat_vert(2),id,xloc,yloc) ! mass points
 
-print*, 'i,j, id', xloc, yloc, id
-
 if (id == 0) then
    istatus(:) = NOT_IN_ANY_DOMAIN
    return
@@ -371,9 +369,8 @@ call toGrid(yloc,j,dy,dym)
 call getCorners(i, j, id, qty, ll, ul, lr, ur, rc)
 
 
-
 ! vertical location
-call get_bounding_levels(which_vert, id, lon_lat_vert, ens_size, state_handle, ll, ul, lr, ur, dx, dy, dxm, dym, k, zloc, fail)
+call get_level_below_obs(which_vert, id, lon_lat_vert, ens_size, state_handle, ll, ul, lr, ur, dx, dy, dxm, dym, k, zloc, fail)
 if (fail) then
    istatus(:) = VERTICAL_LOCATION_FAIL
    return
@@ -953,8 +950,7 @@ compute_geometric_height = (termr*geopot) / ( (termg/grav) * termr - geopot )
 end function compute_geometric_height
 
 !------------------------------------------------------------------
-! should this be get lower level?
-subroutine get_bounding_levels(which_vert, id, lon_lat_vert, ens_size, state_handle, &
+subroutine get_level_below_obs(which_vert, id, lon_lat_vert, ens_size, state_handle, &
                                ll, ul, lr, ur, dx, dy, dxm, dym, &
                                level_below, zloc, fail)
 
@@ -1009,7 +1005,7 @@ select case (which_vert)
        fail = .true.
 end select
 
-end subroutine get_bounding_levels
+end subroutine get_level_below_obs
 
 !------------------------------------------------------------------
 ! horizontal same across the ensemble
