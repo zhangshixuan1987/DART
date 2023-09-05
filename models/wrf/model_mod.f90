@@ -394,7 +394,10 @@ select case (qty)
       fld_k1 = density_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
       fld_k2 = density_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case (QTY_VERTICAL_VELOCITY)
-      print*, 'Do some velocity'
+      zloc(:) = zloc(:) + 0.5_r8 ! Adjust zloc for staggered
+      k(:) = max(1,int(zloc(:)))  ! Adjust corresponding level k
+      fld_k1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym) 
+      fld_k2(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym) 
    case (QTY_SPECIFIC_HUMIDITY)
       fld_k1 = specific_humidity_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
       fld_k2 = specific_humidity_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
