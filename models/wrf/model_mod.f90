@@ -403,7 +403,7 @@ select case (qty)
       fld_k1 = specific_humidity_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
       fld_k2 = specific_humidity_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case (QTY_VAPOR_MIXING_RATIO)
-      print*, 'Do some vapor mixing ratio, should decide earlier surface vs not'
+      fld_k1(:) = surface_type_interpolate(ens_size, id, ll, ul, lr, ur, dxm, dx, dy, dym)
    case (QTY_PRESSURE)
       print*, 'should decide earlier surface vs not'
       fld_k1 = pressure_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
@@ -416,22 +416,49 @@ select case (qty)
       fld_k2 = geopotential_height_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case (QTY_SURFACE_ELEVATION)
       fld_k1 = surface_elevation_interpolate(ens_size, id, ll, ul, lr, ur, dxm, dx, dy, dym)
-   case (QTY_SKIN_TEMPERATURE)
-      fld_k1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case (QTY_SURFACE_TYPE)
       fld_k1(:) = surface_type_interpolate(ens_size, id, ll, ul, lr, ur, dxm, dx, dy, dym)
+   case (QTY_SKIN_TEMPERATURE, QTY_10M_U_WIND_COMPONENT, QTY_10M_V_WIND_COMPONENT, QTY_2M_TEMPERATURE, QTY_2M_SPECIFIC_HUMIDITY)
+      fld_k1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case default ! simple interpolation
       fld_k1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
       fld_k2(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
 end select
 
 ! interpolate vertically
-expected_obs(:) = vertical_interpolation(ens_size, k, zloc, fld_k1, fld_k2)
+if (surface_qty(qty)) then
+  expected_obs(:) = fld_k1(:)
+else
+   expected_obs(:) = vertical_interpolation(ens_size, k, zloc, fld_k1, fld_k2)
+endif
+
+
+
 istatus(:) = 0
 
 end subroutine model_interpolate
 
+!------------------------------------------------------------------
+function surface_qty(qty)
 
+integer, intent(in) :: qty
+logical :: surface_qty
+
+select case (qty)
+
+   case (QTY_2M_TEMPERATURE, &
+         QTY_2M_SPECIFIC_HUMIDITY, &
+         QTY_10M_U_WIND_COMPONENT, &
+         QTY_10M_V_WIND_COMPONENT, &
+         QTY_SURFACE_TYPE, &
+         QTY_SKIN_TEMPERATURE)
+      surface_qty = .false.
+   case default
+      surface_qty = .true.
+
+end select
+
+end function surface_qty
 !------------------------------------------------------------------
 ! WRF has separate model qtys for surface variables
 function update_qty_if_location_is_surface(qty_in, location) result(qty)
