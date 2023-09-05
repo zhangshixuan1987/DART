@@ -978,6 +978,7 @@ select case (which_vert)
             return
          endif
       enddo
+      fail = .false.
    case(VERTISHEIGHT)
       call get_model_height_profile(ll, ul, lr, ur, dx, dy, dxm, dym, id, v_h, state_handle, ens_size)
       do e = 1, ens_size
@@ -988,6 +989,7 @@ select case (which_vert)
             return
          endif
       enddo
+      fail = .false.
    case(VERTISSURFACE)
        zloc(:) = 1.0_r8
        fail = .false.
