@@ -1533,7 +1533,7 @@ pres3 = model_pressure_t(ul(1), ul(2), k, id, state_handle, ens_size)
 pres4 = model_pressure_t(ur(1), ur(2), k, id, state_handle, ens_size)
 
 ! Pressure at location
-pres = dym*( dxm*pres1 + dx*pres2 ) + dy*( dxm*pres3 + dx*pres4 )
+pressure_interpolate = dym*( dxm*pres1 + dx*pres2 ) + dy*( dxm*pres3 + dx*pres4 )
 
 end function pressure_interpolate
 
