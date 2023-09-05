@@ -76,6 +76,7 @@ use         map_utils, only : latlon_to_ij, &
                               proj_info, &
                               map_set, &
                               map_init, &
+                              gridwind_to_truewind, &
                               PROJ_LATLON, &
                               PROJ_LC, &
                               PROJ_PS, &
@@ -191,8 +192,9 @@ type grid_ll
   real(r8), dimension(:,:),   allocatable :: latitude, latitude_u, latitude_v
   real(r8), dimension(:,:),   allocatable :: longitude, longitude_u, longitude_v
   integer :: we, sn ! west-east, south-north number of grid points
+  integer :: wes, sns ! west-east staggered, south-north staggered number of grid points
   integer :: bt ! bottom-top number of grid points
-  integer :: bt_stag
+  integer :: bt_stag ! staggered bottom-top number of grid points
 
   ! wrf options, apply to domain 1 only.
   logical :: polar = .false.
@@ -380,7 +382,8 @@ endif
 !    todo: surface obs only 1 level
 select case (qty)
    case (QTY_U_WIND_COMPONENT, QTY_V_WIND_COMPONENT )
-      print*, 'Do some wind'
+      fld_k1 = wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, lon_lat_vert(1))
+      fld_k2 = wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, lon_lat_vert(1))
    case (QTY_TEMPERATURE)
       fld_k1 = temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
       fld_k2 = temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
@@ -813,11 +816,13 @@ do i = 1, num_domains
     call nc_get_variable_size(ncid, 'XLONG_U', dim_size)
     allocate(grid(i)%longitude_u(dim_size(1), dim_size(2)))
     call nc_get_variable(ncid, 'XLONG_U', grid(i)%longitude_u, routine)
+    grid(i)%wes = dim_size(1)
     
     call nc_get_variable_size(ncid, 'XLONG_V', dim_size)
     allocate(grid(i)%longitude_v(dim_size(1), dim_size(2)))
     call nc_get_variable(ncid, 'XLONG_V', grid(i)%longitude_v, routine)
-    
+    grid(i)%sns = dim_size(2)   
+ 
     call nc_get_variable_size(ncid, 'XLAT', dim_size)
     allocate(grid(i)%latitude(dim_size(1), dim_size(2)))
     call nc_get_variable(ncid, 'XLAT', grid(i)%latitude, routine)
@@ -1552,6 +1557,59 @@ a1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dx
 specific_humidity_interpolate = a1(:) /(1.0_r8 + a1(:))
 
 end function specific_humidity_interpolate
+
+!------------------------------------------------------------------
+
+function wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, lon)
+
+integer,             intent(in) :: ens_size
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: qty
+integer,             intent(in) :: id
+integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
+real(r8),            intent(in) :: xloc, yloc ! location on mass grid
+real(r8),            intent(in) :: lon ! Longitude of point in degrees
+real(r8) :: wind_interpolate(ens_size)
+
+real(r8), dimension(ens_size) :: u_wind_grid, v_wind_grid, u_wind, v_wind
+real(r8) :: xloc_u, yloc_v  ! x ugrid, y vgrid
+real(r8) :: dx, dxm, dy, dym
+integer :: i, j, i_u, j_v
+integer :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+integer :: e, rc
+
+! HK TODO relationship between mass grid and u grid and v grid
+! Original code adds 0.5 to xloc, yloc. But what if you are on the edge of a domain?
+! https://github.com/NCAR/DART/blob/70e6af803a52d14b9f77f872c94b1fe11d5dc2d9/models/wrf/model_mod.f90#L1425-L1432
+
+! xloc and yloc are indices on mass-grid.  If we are on a periodic longitude domain,
+!   then xloc can range from [1 wes).  This means that simply adding 0.5 to xloc has
+!   the potential to render xloc_u out of the valid mass-grid index bounds (>wes).
+xloc_u = xloc + 0.5_r8
+yloc_v = yloc + 0.5_r8
+
+! HK TODO what about periodic_y?
+if ( grid(id)%periodic_x .and. xloc_u > real(grid(id)%wes,r8) ) xloc_u = xloc_u - real(grid(id)%we,r8)
+
+call toGrid(xloc_u,i_u,dx,dxm)
+call toGrid(yloc_v,j_v,dy,dym)
+
+call getCorners(i, j_v, id, qty, ll, ul, lr, ur, rc)
+u_wind_grid = simple_interpolation(ens_size, state_handle, QTY_U_WIND_COMPONENT, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+call getCorners(i_u, j, id, qty, ll, ul, lr, ur, rc)
+v_wind_grid = simple_interpolation(ens_size, state_handle, QTY_V_WIND_COMPONENT, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+
+do e = 1, ens_size
+   call gridwind_to_truewind(lon, grid(id)%proj, u_wind_grid(e), v_wind_grid(e), u_wind(e), v_wind(e))
+enddo
+
+if ( qty == QTY_U_WIND_COMPONENT ) then
+   wind_interpolate = u_wind
+else
+   wind_interpolate = v_wind
+endif
+
+end function wind_interpolate
 
 !------------------------------------------------------------------
 ! If there are other domains in the state:
