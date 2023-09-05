@@ -17,7 +17,7 @@ use     location_mod, only : location_type, get_close_type, &
                              VERTISHEIGHT, VERTISLEVEL, VERTISPRESSURE, &
                              VERTISSURFACE, VERTISUNDEF, &
                              loc_get_close => get_close, get_location, &
-                             query_location
+                             query_location, is_vertical
 
 use    utilities_mod, only : register_module, error_handler, &
                              E_ERR, E_MSG, &
@@ -63,7 +63,9 @@ use obs_kind_mod, only : get_index_for_quantity, &
                          QTY_VORTEX_LON, &
                          QTY_VORTEX_PMIN,QTY_VORTEX_WMAX, &
                          QTY_SKIN_TEMPERATURE, &
-                         QTY_SURFACE_TYPE
+                         QTY_SURFACE_TYPE, &
+                         QTY_2M_TEMPERATURE, &
+                         QTY_2M_SPECIFIC_HUMIDITY
 
 use ensemble_manager_mod, only : ensemble_type
 
@@ -309,13 +311,13 @@ end function get_model_size
 
 
 !------------------------------------------------------------------
-subroutine model_interpolate(state_handle, ens_size, location, qty, expected_obs, istatus)
+subroutine model_interpolate(state_handle, ens_size, location, qty_in, expected_obs, istatus)
 
 
 type(ensemble_type), intent(in) :: state_handle
 integer,             intent(in) :: ens_size
 type(location_type), intent(in) :: location
-integer,             intent(in) :: qty
+integer,             intent(in) :: qty_in
 real(r8),           intent(out) :: expected_obs(ens_size) ! array of interpolated values
 integer,            intent(out) :: istatus(ens_size)
 
@@ -336,6 +338,7 @@ integer :: which_vert       ! vertical coordinate of the observation
 real(r8) :: zloc(ens_size)  ! vertical location of the obs for each ens member
 real(r8) :: fld_k1(ens_size), fld_k2(ens_size) ! value at level k and k+1
 logical :: fail
+integer :: qty
 
 if ( .not. module_initialized ) call static_init_model
 
@@ -376,7 +379,8 @@ if (fail) then
    return
 endif
 
-!    todo: surface obs only 1 level
+qty = update_qty_if_location_is_surface(qty_in, location)
+
 select case (qty)
    case (QTY_U_WIND_COMPONENT, QTY_V_WIND_COMPONENT )
       fld_k1 = wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, lon_lat_vert(1))
@@ -427,6 +431,30 @@ istatus(:) = 0
 
 end subroutine model_interpolate
 
+
+!------------------------------------------------------------------
+! WRF has separate model qtys for surface variables
+function update_qty_if_location_is_surface(qty_in, location) result(qty)
+
+integer, intent(in) :: qty_in
+type(location_type), intent(in) :: location
+integer :: qty
+
+if (.not. is_vertical(location,"SURFACE")) then
+   qty = qty_in
+endif
+
+select case (qty)
+
+   case (QTY_U_WIND_COMPONENT); qty = QTY_10M_U_WIND_COMPONENT 
+   case (QTY_V_WIND_COMPONENT); qty = QTY_10M_V_WIND_COMPONENT
+   case (QTY_POTENTIAL_TEMPERATURE); qty = QTY_2M_TEMPERATURE
+   case (QTY_SPECIFIC_HUMIDITY); qty = QTY_2M_SPECIFIC_HUMIDITY
+   case (QTY_VAPOR_MIXING_RATIO); qty = QTY_2M_SPECIFIC_HUMIDITY  ! Vapor Mixing Ratio (QV, Q2)  
+
+end select
+
+end function update_qty_if_location_is_surface
 
 !------------------------------------------------------------------
 function simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
