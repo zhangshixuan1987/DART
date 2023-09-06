@@ -65,7 +65,22 @@ use obs_kind_mod, only : get_index_for_quantity, &
                          QTY_SKIN_TEMPERATURE, &
                          QTY_SURFACE_TYPE, &
                          QTY_2M_TEMPERATURE, &
-                         QTY_2M_SPECIFIC_HUMIDITY
+                         QTY_2M_SPECIFIC_HUMIDITY, &
+                         QTY_RAINWATER_MIXING_RATIO,    &
+                         QTY_GRAUPEL_MIXING_RATIO,      &
+                         QTY_HAIL_MIXING_RATIO,         &
+                         QTY_SNOW_MIXING_RATIO,         &
+                         QTY_ICE_MIXING_RATIO,          &
+                         QTY_CLOUDWATER_MIXING_RATIO,   &
+                         QTY_DROPLET_NUMBER_CONCENTR,   &
+                         QTY_ICE_NUMBER_CONCENTRATION,  &
+                         QTY_SNOW_NUMBER_CONCENTR,      &
+                         QTY_RAIN_NUMBER_CONCENTR,      &
+                         QTY_GRAUPEL_NUMBER_CONCENTR,   &
+                         QTY_HAIL_NUMBER_CONCENTR 
+
+
+
 
 use ensemble_manager_mod, only : ensemble_type
 
@@ -337,6 +352,7 @@ integer :: k(ens_size)      ! level
 integer :: which_vert       ! vertical coordinate of the observation
 real(r8) :: zloc(ens_size)  ! vertical location of the obs for each ens member
 real(r8) :: fld_k1(ens_size), fld_k2(ens_size) ! value at level k and k+1
+real(r8) :: fld1(ens_size), fld2(ens_size) ! value at level k and k+1 non-negative if required
 logical :: fail
 integer :: qty
 
@@ -425,18 +441,47 @@ select case (qty)
       fld_k2(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
 end select
 
-! interpolate vertically
 if (surface_qty(qty)) then
   expected_obs(:) = fld_k1(:)
 else
-   expected_obs(:) = vertical_interpolation(ens_size, k, zloc, fld_k1, fld_k2)
+   fld1  = force_non_negative_if_required(ens_size, qty, fld_k1)
+   fld2  = force_non_negative_if_required(ens_size, qty, fld_k2)
+   expected_obs(:) = vertical_interpolation(ens_size, k, zloc, fld1, fld2)
 endif
-
-
 
 istatus(:) = 0
 
 end subroutine model_interpolate
+
+
+!------------------------------------------------------------------
+function force_non_negative_if_required(n, qty, fld)
+
+integer,  intent(in) :: n
+integer,  intent(in) :: qty
+real(r8), intent(in) :: fld(n)
+
+real(r8) :: force_non_negative_if_required(n)
+
+select case (qty)
+   case (QTY_RAINWATER_MIXING_RATIO,    &
+         QTY_GRAUPEL_MIXING_RATIO,      &
+         QTY_HAIL_MIXING_RATIO,         &
+         QTY_SNOW_MIXING_RATIO,         &
+         QTY_ICE_MIXING_RATIO,          &
+         QTY_CLOUDWATER_MIXING_RATIO,   &
+         QTY_DROPLET_NUMBER_CONCENTR,   &
+         QTY_ICE_NUMBER_CONCENTRATION,  &
+         QTY_SNOW_NUMBER_CONCENTR,      &
+         QTY_RAIN_NUMBER_CONCENTR,      &
+         QTY_GRAUPEL_NUMBER_CONCENTR,   &
+         QTY_HAIL_NUMBER_CONCENTR )
+      force_non_negative_if_required = max(0.0_r8, fld)
+   case default
+      force_non_negative_if_required = fld
+end select
+
+end function force_non_negative_if_required
 
 !------------------------------------------------------------------
 function surface_qty(qty)
