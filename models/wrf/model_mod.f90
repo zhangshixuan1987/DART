@@ -15,7 +15,7 @@ use     location_mod, only : location_type, get_close_type, &
                              set_location, set_location_missing, &
                              set_vertical_localization_coord, &
                              VERTISHEIGHT, VERTISLEVEL, VERTISPRESSURE, &
-                             VERTISSURFACE, VERTISUNDEF, &
+                             VERTISSURFACE, VERTISUNDEF, VERTISSCALEHEIGHT, &
                              loc_get_close => get_close, get_location, &
                              query_location, is_vertical,  vertical_localization_on
 
@@ -87,7 +87,7 @@ use ensemble_manager_mod, only : ensemble_type
 use default_model_mod, only : write_model_time, &
                               init_time => fail_init_time, &
                               init_conditions => fail_init_conditions, &
-                              convert_vertical_obs, convert_vertical_state, adv_1step
+                              convert_vertical_obs, adv_1step
 
 use         map_utils, only : latlon_to_ij, &
                               proj_info, &
@@ -1727,6 +1727,261 @@ enddo
 end function get_wrf_domain
 
 !------------------------------------------------------------------
+subroutine convert_vertical_state(state_handle, num, locs, loc_qtys, loc_indx, &
+                                  which_vert, istatus)
+
+type(ensemble_type), intent(in)    :: state_handle
+integer,             intent(in)    :: num
+type(location_type), intent(inout) :: locs(num)     ! location for each state element
+integer,             intent(in)    :: loc_qtys(num) ! qty for each state element
+integer(i8),         intent(in)    :: loc_indx(num) ! index into the state vector
+integer,             intent(in)    :: which_vert  ! vertical coordinate to be converted to
+integer,             intent(out)   :: istatus
+
+real(r8) :: lon_lat_vert(3)
+integer  :: ip, jp, kp, id ! x,y,z of state index
+integer  :: var_id, state_id
+real(r8) :: vert ! vertical after conversion
+integer  :: i
+
+
+if (which_vert == VERTISLEVEL) then
+
+   do i = 1, num
+ 
+      lon_lat_vert = get_location(locs(i))
+      call get_model_variable_indices(loc_indx(i), ip, jp, kp, var_id=var_id, dom_id=state_id)
+
+      if (on_w_grid(state_id, var_id)) then
+         vert = real(kp) - 0.5_r8
+      else
+          vert = real(kp)
+      endif
+
+       locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
+
+   enddo
+ 
+elseif (which_vert == VERTISPRESSURE) then
+
+   do i = 1, num
+   
+      lon_lat_vert = get_location(locs(i))
+      call get_model_variable_indices(loc_indx(i), ip, jp, kp, var_id=var_id, dom_id=state_id)
+      id = get_wrf_domain(state_id)
+      vert = model_pressure(ip, jp, kp, id, var_id, state_id, state_handle)
+      locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
+   
+   enddo
+
+
+elseif (which_vert == VERTISHEIGHT) then
+
+   do i = 1, num
+   
+      lon_lat_vert = get_location(locs(i))
+      call get_model_variable_indices(loc_indx(i), ip, jp, kp, var_id=var_id, dom_id=state_id)
+
+      !vert = model_height(ip, jp, kp, id, loc_qtys(i), state_handle)  ! to do
+      !locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
+   
+   enddo
+
+elseif (which_vert == VERTISSCALEHEIGHT) then
+
+   do i = 1, num
+   
+      lon_lat_vert = get_location(locs(i))
+      call get_model_variable_indices(loc_indx(i), ip, jp, kp, var_id=var_id, dom_id=state_id)
+
+      !vert = model_scaleheight(ip, jp, kp, id, var_type, state_handle)  ! to do
+      !locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
+   
+   enddo
+
+endif
+
+end subroutine
+
+
+!------------------------------------------------------------------
+pure function interp_pressure(p1, p2, use_log)
+
+real(r8), intent(in) :: p1(1), p2(1)
+logical,  intent(in) :: use_log
+real(r8) :: interp_pressure
+
+if (use_log) then
+   interp_pressure = exp((log(p1(1)) + log(p2(1)))/2.0_r8)
+else
+   interp_pressure = (p1(1) + p2(1))/2.0_r8
+endif
+
+end function interp_pressure
+
+!------------------------------------------------------------------
+pure function extrap_pressure(p1, p2, use_log)
+
+real(r8), intent(in) :: p1(1), p2(1)
+logical,  intent(in) :: use_log
+
+real(r8) :: extrap_pressure
+real(r8) :: intermediate
+
+if (use_log) then
+   intermediate = (3.0_r8*log(p1(1)) - log(p2(1)))/2.0_r8
+   if (intermediate <= 0.0_r8) then
+      extrap_pressure = p1(1)
+   else
+      extrap_pressure = exp(intermediate)
+   endif
+endif
+
+end function extrap_pressure
+
+
+!------------------------------------------------------------------
+function model_pressure(i, j, kp, id, var_id, state_id, state_handle)
+
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: i,j,kp,id
+integer,             intent(in) :: var_id
+integer,             intent(in) :: state_id
+real(r8)                        :: model_pressure
+
+real(r8) :: p(1), p_one(1), p_two(1) ! only using the mean, so calling model_pressure_t with ens_size=1
+integer   :: k(1), off
+real(r8) :: intermediate
+
+k(1) = kp ! array version
+
+if (on_t_grid(state_id, var_id)) then
+   p = model_pressure_t(i, j, k, id, state_handle, 1)
+   model_pressure = p(1)
+
+elseif (on_w_grid(state_id, var_id)) then ! average in the vertical
+
+   if (kp==1) then ! on boundary, extrapolate in the vertical
+
+      p_one = model_pressure_t(i, j, k,   id, state_handle, 1)
+      p_two = model_pressure_t(i, j, k+1, id, state_handle, 1)
+      model_pressure = extrap_pressure(p_one, p_two, log_vert_interp)
+
+   elseif ( kp==grid(id)%bt_stag ) then ! on boundary, extrapolate in the vertical
+
+      p_one = model_pressure_t(i, j, k-1, id, state_handle, 1)
+      p_two = model_pressure_t(i, j, k-2, id, state_handle, 1)
+      model_pressure = extrap_pressure(p_one, p_two, log_vert_interp)
+
+   else  ! interpolate 
+
+      p_one = model_pressure_t(i, j, k,  id, state_handle, 1)
+      p_two = model_pressure_t(i, j, k-1,id, state_handle, 1)
+      model_pressure = interp_pressure(p_one, p_two, log_vert_interp)
+
+   endif
+
+elseif (on_u_grid(state_id, var_id)) then ! average in the horizontal u direction
+
+   if  (i==grid(id)%wes) then
+
+      if ( grid(id)%periodic_x ) then
+
+          ! We are at seam in longitude, take first and last M-grid points
+          p_one = model_pressure_t(i-1,   j, k, id, state_handle, 1)
+          p_two = model_pressure_t(1, j, k, id, state_handle, 1)
+          model_pressure = interp_pressure(p_one, p_two, log_horz_interpM)
+
+      else
+
+          ! If not periodic, then try extrapolating
+          p_one = model_pressure_t(i-1, j, k, id, state_handle, 1)
+          p_two = model_pressure_t(i-2, j, k, id, state_handle, 1)
+          model_pressure = extrap_pressure(p_one, p_two, log_horz_interpM)
+
+      endif
+
+   elseif (i==1) then
+
+      if ( grid(id)%periodic_x ) then
+
+         ! We are at seam in longitude, take first and last M-grid points
+         p_one = model_pressure_t(i, j, k, id, state_handle, 1)
+         p_two = model_pressure_t(grid(id)%we, j, k, id, state_handle, 1)
+         model_pressure = interp_pressure(p_one, p_two, log_horz_interpM)
+   
+      else
+
+         ! If not periodic, then try extrapolating
+         p_one = model_pressure_t(i,   j, k, id, state_handle, 1)
+         p_two = model_pressure_t(i+1, j, k, id, state_handle, 1)
+         model_pressure = extrap_pressure(p_one, p_two, log_horz_interpM)
+
+      endif
+
+   else
+       p_one = model_pressure_t(i,   j, k, id, state_handle, 1)
+       p_two = model_pressure_t(i-1, j, k, id, state_handle, 1)
+       model_pressure = interp_pressure(p_one, p_two, log_horz_interpM)
+   endif
+
+elseif (on_v_grid(state_id, var_id)) then ! average in the horizontal v direction
+
+   if (j==grid(id)%sns) then
+
+      ! Check to see if periodic in latitude (polar)
+      if ( grid(id)%polar ) then
+
+         ! The upper corner is 180 degrees of longitude away
+         off = i + grid(id)%we/2
+         if ( off > grid(id)%we ) off = off - grid(id)%we
+
+         p_one = model_pressure_t(off, j-1, k, id, state_handle, 1)
+         p_two = model_pressure_t(i,   j-1, k, id, state_handle, 1)
+         model_pressure = interp_pressure(p_one, p_two, log_horz_interpM)
+   
+         ! If not periodic, then try extrapolating
+      else
+
+         p_one = model_pressure_t(i,j-1,k,id, state_handle, 1)
+         p_two = model_pressure_t(i,j-2,k,id, state_handle, 1)
+         model_pressure = extrap_pressure(p_one, p_two, log_horz_interpM)
+
+      endif
+
+    elseif (j==1) then
+
+       ! Check to see if periodic in latitude (polar)
+       if ( grid(id)%polar ) then
+
+          ! The lower corner is 180 degrees of longitude away
+          off = i + grid(id)%we/2
+          if ( off > grid(id)%we ) off = off - grid(id)%we
+
+          p_one = model_pressure_t(off,j,k,id, state_handle, 1)
+          p_two = model_pressure_t(i,  j,k,id, state_handle, 1)
+          model_pressure = interp_pressure(p_one, p_two, log_horz_interpM)
+
+          ! If not periodic, then try extrapolating
+       else
+          p_one = model_pressure_t(i, j, k, id, state_handle, 1)
+          p_two = model_pressure_t(i, j+1, k, id, state_handle, 1)
+          model_pressure = extrap_pressure(p_one, p_two, log_horz_interpM)
+       endif
+
+    else
+
+      p_one = model_pressure_t(i,j,  k,id, state_handle, 1)
+      p_two = model_pressure_t(i,j-1,k,id, state_handle, 1)
+      model_pressure = interp_pressure(p_one, p_two, log_horz_interpM)
+
+    endif
+
+endif
+
+end function model_pressure
+
+!------------------------------------------------------------------
 subroutine convert_base_vertical(base_loc, fail)
 
 type(location_type), intent(inout) :: base_loc
@@ -1742,6 +1997,7 @@ endif
 base_vertical_coord = nint(query_location(base_loc))
 if (base_vertical_coord /= vert_localization_coord) then
 
+print*, 'not done'
 
 endif
 
@@ -1821,6 +2077,18 @@ else
 endif
 
 end function on_w_grid
+
+!------------------------------------------------------------------
+function on_t_grid(state_id, ivar)
+integer, intent(in) :: state_id, ivar
+logical :: on_t_grid
+
+on_t_grid = (get_dim_name(state_id, ivar, 1) == 'west_east') .and. &
+            (get_dim_name(state_id, ivar, 2) == 'south_north')
+
+end function on_t_grid
+
+
 !------------------------------------------------------------------
 !------------------------------------------------------------------
 
