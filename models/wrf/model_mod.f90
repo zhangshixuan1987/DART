@@ -398,8 +398,8 @@ qty = update_qty_if_location_is_surface(qty_in, location)
 
 select case (qty)
    case (QTY_U_WIND_COMPONENT, QTY_V_WIND_COMPONENT )
-      fld_k1 = wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, lon_lat_vert(1))
-      fld_k2 = wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, lon_lat_vert(1))
+      fld_k1 = wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, i, j, lon_lat_vert(1))
+      fld_k2 = wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, i, j, lon_lat_vert(1))
    case (QTY_TEMPERATURE)
       fld_k1 = temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
       fld_k2 = temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
@@ -1659,7 +1659,7 @@ end function specific_humidity_interpolate
 
 !------------------------------------------------------------------
 
-function wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, lon)
+function wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, i, j, lon)
 
 integer,             intent(in) :: ens_size
 type(ensemble_type), intent(in) :: state_handle
@@ -1667,13 +1667,14 @@ integer,             intent(in) :: qty
 integer,             intent(in) :: id
 integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
 real(r8),            intent(in) :: xloc, yloc ! location on mass grid
+integer,             intent(in) :: i,j ! ll corners of mass grid
 real(r8),            intent(in) :: lon ! Longitude of point in degrees
 real(r8) :: wind_interpolate(ens_size)
 
 real(r8), dimension(ens_size) :: u_wind_grid, v_wind_grid, u_wind, v_wind
 real(r8) :: xloc_u, yloc_v  ! x ugrid, y vgrid
 real(r8) :: dx, dxm, dy, dym
-integer :: i, j, i_u, j_v
+integer :: i_u, j_v
 integer :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
 integer :: e, rc
 
