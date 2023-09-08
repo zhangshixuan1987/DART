@@ -371,8 +371,7 @@ if (id == 0) then
    return
 endif
 
-
-if (.not. able_to_interpolate_qty(id, qty) ) then
+if (.not. able_to_interpolate_qty(id, qty_in) ) then
    istatus(:) = CANNOT_INTERPOLATE_QTY
    return
 endif
@@ -385,7 +384,7 @@ endif
 ! horizontal location mass point
 call toGrid(xloc,i,dx,dxm)
 call toGrid(yloc,j,dy,dym)
-call getCorners(i, j, id, qty, ll, ul, lr, ur, rc)
+call getCorners(i, j, id, qty_in, ll, ul, lr, ur, rc)
 
 
 ! vertical location
@@ -514,6 +513,7 @@ integer :: qty
 
 if (.not. is_vertical(location,"SURFACE")) then
    qty = qty_in
+   return
 endif
 
 select case (qty)
