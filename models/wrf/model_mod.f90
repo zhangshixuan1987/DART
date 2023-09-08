@@ -179,8 +179,7 @@ logical :: allow_perturbed_ics = .false.
 !-------------------------------
 
 logical, parameter :: restrict_polar = .false. !HK what is this for?
-real(r8), parameter :: ts0 = 300.0_r8        ! Base potential temperature for all levels.
-real(r8), parameter :: kappa = 2.0_r8/7.0_r8 ! gas_constant / cp
+
 
 namelist /model_nml/ &
 default_state_variables, &
@@ -236,8 +235,10 @@ integer(i8) :: model_size
 
 
 ! Physical constants
-real (kind=r8), PARAMETER    :: rd_over_rv = gas_constant / gas_constant_v
-real (kind=r8), PARAMETER    :: cpovcv = 1.4_r8        ! cp / (cp - gas_constant)
+real(r8), parameter :: rd_over_rv = gas_constant / gas_constant_v
+real(r8), parameter :: cpovcv = 1.4_r8        ! cp / (cp - gas_constant)
+real(r8), parameter :: ts0 = 300.0_r8         ! Base potential temperature for all levels.
+real(r8), parameter :: kappa = 2.0_r8/7.0_r8  ! gas_constant / cp
 
 contains
 
@@ -1182,9 +1183,6 @@ integer,             intent(in) :: ens_size
 integer,             intent(in) :: i,j,k(ens_size),id
 type(ensemble_type), intent(in) :: state_handle
 real(r8) :: model_pressure_t(ens_size)
-
-real (kind=r8), parameter    :: rd_over_rv = gas_constant / gas_constant_v
-real (kind=r8), parameter    :: cpovcv = 1.4_r8        ! cp / (cp - gas_constant)
 
 integer(i8), dimension(ens_size) :: iqv, it
 real(r8),    dimension(ens_size) :: qvf1, rho, x_iqv, x_it
