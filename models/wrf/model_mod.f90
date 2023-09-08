@@ -17,7 +17,7 @@ use     location_mod, only : location_type, get_close_type, &
                              VERTISHEIGHT, VERTISLEVEL, VERTISPRESSURE, &
                              VERTISSURFACE, VERTISUNDEF, &
                              loc_get_close => get_close, get_location, &
-                             query_location, is_vertical
+                             query_location, is_vertical,  vertical_localization_on
 
 use    utilities_mod, only : register_module, error_handler, &
                              E_ERR, E_MSG, &
@@ -644,19 +644,38 @@ end subroutine get_state_meta_data
 
 !------------------------------------------------------------------
 ! obs have a type and qty
-!  observation type not taken in to account for wrf get close calulations
+!  observation type not taken in to account for wrf get close calculations
 subroutine get_close_obs(gc, base_loc, base_type, locs, loc_qtys, loc_types, &
                          num_close, close_ind, dist, state_handle)
 
-type(get_close_type),          intent(in)     :: gc
-type(location_type),           intent(inout)  :: base_loc, locs(:)
-integer,                       intent(in)     :: base_type, loc_qtys(:), loc_types(:)
-integer,                       intent(out)    :: num_close, close_ind(:)
-real(r8),            optional, intent(out)    :: dist(:)
-type(ensemble_type), optional, intent(in)     :: state_handle
+type(get_close_type),          intent(in)    :: gc            ! handle to a get_close structure
+integer,                       intent(in)    :: base_type     ! observation TYPE
+type(location_type),           intent(inout) :: base_loc      ! location of interest
+type(location_type),           intent(inout) :: locs(:)       ! obs/state locations
+integer,                       intent(in)    :: loc_qtys(:)   ! QTYS for obs
+integer,                       intent(in)    :: loc_types(:)  ! types for obs
+integer,                       intent(out)   :: num_close     ! how many are close
+integer,                       intent(out)   :: close_ind(:)  ! indices into the locs array
+real(r8),            optional, intent(out)   :: dist(:)       ! distances in radians
+type(ensemble_type), optional, intent(in)    :: state_handle
 
-call get_close(gc, base_loc, base_type, locs, loc_qtys, &
-               num_close, close_ind, dist, state_handle)
+character(len=*), parameter :: routine = 'get_close_obs'
+logical :: fail
+
+call convert_base_vertical(base_loc, fail)
+if (fail) then
+   num_close = 0
+   return
+endif
+
+call loc_get_close(gc, base_loc, base_type, locs, loc_qtys, &
+                          num_close, close_ind)
+
+if (.not. present(dist)) return
+
+!call convert_vertical_obs()
+
+!call calculate_distances()
 
 end subroutine get_close_obs
 
@@ -673,26 +692,7 @@ integer,                       intent(out)    :: num_close, close_ind(:)
 real(r8),            optional, intent(out)    :: dist(:)
 type(ensemble_type), optional, intent(in)     :: state_handle
 
-call get_close(gc, base_loc, base_type, locs, loc_qtys, &
-               num_close, close_ind, dist, state_handle)
-
-end subroutine get_close_state
-
-!------------------------------------------------------------------
-subroutine get_close(gc, base_loc, base_type, locs, loc_qtys, &
-                         num_close, close_ind, dist, ens_handle)
-
-type(get_close_type),          intent(in)    :: gc            ! handle to a get_close structure
-integer,                       intent(in)    :: base_type     ! observation TYPE
-type(location_type),           intent(inout) :: base_loc      ! location of interest
-type(location_type),           intent(inout) :: locs(:)       ! obs/state locations
-integer,                       intent(in)    :: loc_qtys(:)   ! QTYS for obs/state
-integer,                       intent(out)   :: num_close     ! how many are close
-integer,                       intent(out)   :: close_ind(:)  ! indices into the locs array
-real(r8),            optional, intent(out)   :: dist(:)       ! distances in radians
-type(ensemble_type), optional, intent(in)    :: ens_handle
-
-character(len=*), parameter :: routine = 'get_close'
+character(len=*), parameter :: routine = 'get_close_state'
 logical :: fail
 
 call convert_base_vertical(base_loc, fail)
@@ -706,11 +706,12 @@ call loc_get_close(gc, base_loc, base_type, locs, loc_qtys, &
 
 if (.not. present(dist)) return
 
-!call convert_vertical()
+!call convert_vertical_state()
 
 !call calculate_distances()
 
-end subroutine get_close
+
+end subroutine get_close_state
 
 
 !------------------------------------------------------------------
@@ -1731,7 +1732,18 @@ subroutine convert_base_vertical(base_loc, fail)
 type(location_type), intent(inout) :: base_loc
 logical, intent(out) :: fail
 
-fail = .true.
+integer :: base_vertical_coord
+
+if (.not. vertical_localization_on() ) then
+   fail = .false.
+   return
+endif
+
+base_vertical_coord = nint(query_location(base_loc))
+if (base_vertical_coord /= vert_localization_coord) then
+
+
+endif
 
 end subroutine convert_base_vertical
 
