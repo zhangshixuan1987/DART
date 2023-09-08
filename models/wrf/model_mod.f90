@@ -421,7 +421,6 @@ select case (qty)
    case (QTY_VAPOR_MIXING_RATIO)
       fld_k1(:) = surface_type_interpolate(ens_size, id, ll, ul, lr, ur, dxm, dx, dy, dym)
    case (QTY_PRESSURE)
-      print*, 'should decide earlier surface vs not'
       fld_k1 = pressure_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
       fld_k2 = pressure_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case (QTY_VORTEX_LAT, QTY_VORTEX_LON, QTY_VORTEX_PMIN, QTY_VORTEX_WMAX)
@@ -497,9 +496,9 @@ select case (qty)
          QTY_10M_V_WIND_COMPONENT, &
          QTY_SURFACE_TYPE, &
          QTY_SKIN_TEMPERATURE)
-      surface_qty = .false.
-   case default
       surface_qty = .true.
+   case default
+      surface_qty = .false.
 
 end select
 
