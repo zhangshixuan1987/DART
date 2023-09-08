@@ -1188,8 +1188,6 @@ real(r8),    dimension(ens_size) :: qvf1, rho, x_iqv, x_it
 
 integer :: var_idv, var_idt, e
 
-model_pressure_t = missing_r8
-
 ! Adapted the code from WRF module_big_step_utilities_em.F ----
 !         subroutine calc_p_rho_phi      Y.-R. Guo (10/20/2004)
 
