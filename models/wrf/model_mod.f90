@@ -1767,8 +1767,8 @@ do i = 1, num
    
    elseif (which_vert == VERTISHEIGHT) then
    
-      !vert = model_height(ip, jp, kp, id, loc_qtys(i), state_handle)  ! to do
-      !locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
+      vert = model_height(ip, jp, kp, id, var_id, state_id, state_handle)  ! to do
+      locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
    
    elseif (which_vert == VERTISSCALEHEIGHT) then
    
@@ -1781,7 +1781,359 @@ do i = 1, num
 
 enddo
 
-end subroutine
+end subroutine convert_vertical_state
+
+!------------------------------------------------------------------
+
+function model_height(i,j,k,id,var_id, state_id, state_handle)
+
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: i,j,k,id
+integer,             intent(in) :: var_id,state_id
+real(r8)                        :: model_height
+
+integer(i8)  :: i1, i2, i3, i4
+integer      :: off
+real(r8)     :: x_i1(1), x_i2(1), x_i3(1), x_i4(1)
+real(r8)     :: geop, lat
+
+! If W-grid (on ZNW levels), native to GZ
+if( on_w_grid(state_id, var_id) ) then
+
+   i1 = get_dart_vector_index(i,j,k, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+   x_i1 = get_state(i1, state_handle)
+
+   geop = stat_dat(id)%phb(i,j,k)+x_i1(1)/gravity
+   model_height = compute_geometric_height(geop, grid(id)%latitude(i, j))
+
+! If U-grid, then height is defined between U points, both in horizontal
+!   and in vertical, so average -- averaging depends on longitude periodicity
+elseif( on_u_grid(state_id, var_id) ) then
+
+   if( i == grid(id)%wes ) then
+
+      ! Check to see if periodic in longitude
+      if ( grid(id)%periodic_x ) then
+
+         ! We are at the seam in longitude, so take first and last mass points
+         i1 = get_dart_vector_index(i-1,j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i2 = get_dart_vector_index(i-1,j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i3 = get_dart_vector_index(1,  j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i4 = get_dart_vector_index(1,  j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+
+         x_i1 = get_state(i1, state_handle)
+         x_i2 = get_state(i2, state_handle)
+         x_i3 = get_state(i3, state_handle)
+         x_i4 = get_state(i4, state_handle)
+
+! HK todo what is minval for? Is it just for converting an array to a scalar?
+         geop = minval(( (stat_dat(id)%phb(i-1,j,k  ) + x_i1) &
+                 +(stat_dat(id)%phb(i-1,j,k+1) + x_i2) &
+                 +(stat_dat(id)%phb(1  ,j,k  ) + x_i3) &
+                 +(stat_dat(id)%phb(1  ,j,k+1) + x_i4) )/(4.0_r8*gravity))
+         
+         lat = ( grid(id)%latitude(i-1,j)  &
+                +grid(id)%latitude(i-1,j)  &
+                +grid(id)%latitude(1  ,j)  &
+                +grid(id)%latitude(1  ,j) ) / 4.0_r8
+
+         model_height = compute_geometric_height(geop, lat)
+         
+      else
+
+         ! If not periodic, then try extrapolating
+         i1 = get_dart_vector_index(i-1,j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i2 = get_dart_vector_index(i-1,j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+
+         x_i1 = get_state(i1, state_handle)
+         x_i2 = get_state(i2, state_handle)
+         x_i3 = get_state(i1 -1, state_handle)
+         x_i4 = get_state(i2 -1, state_handle)
+
+
+         geop = minval(( 3.0_r8*(stat_dat(id)%phb(i-1,j,k  )+x_i1) &
+                 +3.0_r8*(stat_dat(id)%phb(i-1,j,k+1)+x_i2) &
+                        -(stat_dat(id)%phb(i-2,j,k  )+x_i3) &
+                        -(stat_dat(id)%phb(i-2,j,k+1)+x_i4) )/(4.0_r8*gravity))
+
+         lat = ( 3.0_r8*grid(id)%latitude(i-1,j)  &
+                +3.0_r8*grid(id)%latitude(i-1,j)  &
+                       -grid(id)%latitude(i-2,j)  &
+                       -grid(id)%latitude(i-2,j)) / 4.0_r8
+
+         model_height = compute_geometric_height(geop, lat)
+
+      endif
+
+   elseif( i == 1 ) then
+
+      ! Check to see if periodic in longitude
+      if ( grid(id)%periodic_x ) then
+
+         ! We are at the seam in longitude, so take first and last mass points
+         off = grid(id)%we
+         i1 = get_dart_vector_index(i  ,j,k  ,state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i2 = get_dart_vector_index(i  ,j,k+1,state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i3 = get_dart_vector_index(off,j,k  ,state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i4 = get_dart_vector_index(off,j,k+1,state_id, QTY_GEOPOTENTIAL_HEIGHT)
+
+         x_i1 = get_state(i1, state_handle)
+         x_i2 = get_state(i2, state_handle)
+         x_i3 = get_state(i3, state_handle)
+         x_i4 = get_state(i4, state_handle)
+
+         geop = minval(( (stat_dat(id)%phb(i  ,j,k  ) + x_i1) &
+                 +(stat_dat(id)%phb(i  ,j,k+1) + x_i2) &
+                 +(stat_dat(id)%phb(off,j,k  ) + x_i3) &
+                 +(stat_dat(id)%phb(off,j,k+1) + x_i4) )/(4.0_r8*gravity))
+         
+         lat = ( grid(id)%latitude(i  ,j)  &
+                +grid(id)%latitude(i  ,j)  &
+                +grid(id)%latitude(off,j)  &
+                +grid(id)%latitude(off,j)) / 4.0_r8
+
+         model_height = compute_geometric_height(geop, lat)
+
+      else
+
+         ! If not periodic, then try extrapolating
+         i1 = get_dart_vector_index(i,j,k  ,state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i2 = get_dart_vector_index(i,j,k+1,state_id, QTY_GEOPOTENTIAL_HEIGHT)
+
+         x_i1 = get_state(i1, state_handle)
+         x_i2 = get_state(i2, state_handle)
+         x_i3 = get_state(i1 +1, state_handle)
+         x_i4 = get_state(i2 +1, state_handle)
+
+
+         geop = minval(( 3.0_r8*(stat_dat(id)%phb(i  ,j,k  )+x_i1)   &
+                 +3.0_r8*(stat_dat(id)%phb(i  ,j,k+1)+x_i2)   &
+                        -(stat_dat(id)%phb(i+1,j,k  )+x_i3) &
+                        -(stat_dat(id)%phb(i+1,j,k+1)+x_i4) )/(4.0_r8*gravity))
+
+         lat = ( 3.0_r8*grid(id)%latitude(i  ,j)  &
+                +3.0_r8*grid(id)%latitude(i  ,j)  &
+                       -grid(id)%latitude(i+1,j)  &
+                       -grid(id)%latitude(i+1,j)) / 4.0_r8
+
+         model_height = compute_geometric_height(geop, lat)
+
+      endif
+
+   else
+
+      i1 = get_dart_vector_index(i,j,k  ,state_id, QTY_GEOPOTENTIAL_HEIGHT)
+      i2 = get_dart_vector_index(i,j,k+1,state_id, QTY_GEOPOTENTIAL_HEIGHT)
+
+      x_i1 = get_state(i1, state_handle)
+      x_i2 = get_state(i2, state_handle)
+      x_i3 = get_state(i1 -1, state_handle)
+      x_i4 = get_state(i2 -1, state_handle)
+
+
+      geop = minval(( (stat_dat(id)%phb(i  ,j,k  )+x_i1)   &
+              +(stat_dat(id)%phb(i  ,j,k+1)+x_i2)   &
+              +(stat_dat(id)%phb(i-1,j,k  )+x_i3) &
+              +(stat_dat(id)%phb(i-1,j,k+1)+x_i4) )/(4.0_r8*gravity))
+
+      lat = (  grid(id)%latitude(i  ,j)  &
+              +grid(id)%latitude(i  ,j)  &
+              +grid(id)%latitude(i-1,j)  &
+              +grid(id)%latitude(i-1,j)) / 4.0_r8
+
+      model_height = compute_geometric_height(geop, lat)
+
+   endif
+
+! If V-grid, then pressure is defined between V points, both in horizontal
+!   and in vertical, so average -- averaging depends on polar periodicity
+elseif( on_v_grid(state_id, var_id) ) then
+
+   if( j == grid(id)%sns ) then
+
+      ! Check to see if periodic in latitude (polar)
+      if ( grid(id)%polar ) then
+
+         ! The upper corner is 180 degrees of longitude away
+         off = i + grid(id)%we/2
+         if ( off > grid(id)%we ) off = off - grid(id)%we
+
+         i1 = get_dart_vector_index(off,j-1,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i2 = get_dart_vector_index(off,j-1,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i3 = get_dart_vector_index(i  ,j-1,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i4 = get_dart_vector_index(i  ,j-1,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+
+         x_i1 = get_state(i1, state_handle)
+         x_i2 = get_state(i2, state_handle)
+         x_i3 = get_state(i3, state_handle)
+         x_i4 = get_state(i4, state_handle)
+
+         geop = minval(( (stat_dat(id)%phb(off,j-1,k  )+x_i1) &
+                 +(stat_dat(id)%phb(off,j-1,k+1)+x_i2) &
+                 +(stat_dat(id)%phb(i  ,j-1,k  )+x_i3) &
+                 +(stat_dat(id)%phb(i  ,j-1,k+1)+x_i4) )/(4.0_r8*gravity))
+         
+         lat = ( grid(id)%latitude(off,j-1)  &
+                +grid(id)%latitude(off,j-1)  &
+                +grid(id)%latitude(i  ,j-1)  &
+                +grid(id)%latitude(i  ,j-1)) / 4.0_r8
+
+         model_height = compute_geometric_height(geop, lat)
+
+      else
+
+         ! If not periodic, then try extrapolating
+         i1 = get_dart_vector_index(i,j-1,k ,  state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i2 = get_dart_vector_index(i,j-1,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i3 = get_dart_vector_index(i,j-2,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i4 = get_dart_vector_index(i,j-2,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+
+         x_i1 = get_state(i1, state_handle)
+         x_i2 = get_state(i2, state_handle)
+         x_i3 = get_state(i3, state_handle)
+         x_i4 = get_state(i4, state_handle)
+
+         geop = minval(( 3.0_r8*(stat_dat(id)%phb(i,j-1,k  )+x_i1) &
+                 +3.0_r8*(stat_dat(id)%phb(i,j-1,k+1)+x_i2) &
+                        -(stat_dat(id)%phb(i,j-2,k  )+x_i3) &
+                        -(stat_dat(id)%phb(i,j-2,k+1)+x_i4) )/(4.0_r8*gravity))
+
+         lat = ( 3.0_r8*grid(id)%latitude(i,j-1)  &
+                +3.0_r8*grid(id)%latitude(i,j-1)  &
+                       -grid(id)%latitude(i,j-2)  &
+                       -grid(id)%latitude(i,j-2)) / 4.0_r8
+
+         model_height = compute_geometric_height(geop, lat)
+
+      endif
+
+   elseif( j == 1 ) then
+
+      ! Check to see if periodic in latitude (polar)
+      if ( grid(id)%polar ) then
+
+         ! The lower corner is 180 degrees of longitude away
+         off = i + grid(id)%we/2
+         if ( off > grid(id)%we ) off = off - grid(id)%we
+         if ( off > grid(id)%we ) off = off - grid(id)%we
+
+         i1 = get_dart_vector_index(off,j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i2 = get_dart_vector_index(off,j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i3 = get_dart_vector_index(i  ,j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i4 = get_dart_vector_index(i  ,j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+
+         x_i1 = get_state(i1, state_handle)
+         x_i2 = get_state(i2, state_handle)
+         x_i3 = get_state(i3, state_handle)
+         x_i4 = get_state(i4, state_handle)
+
+         geop = minval(( (stat_dat(id)%phb(off,j,k  )+x_i1) &
+                 +(stat_dat(id)%phb(off,j,k+1)+x_i2) &
+                 +(stat_dat(id)%phb(i  ,j,k  )+x_i3) &
+                 +(stat_dat(id)%phb(i  ,j,k+1)+x_i4) )/(4.0_r8*gravity))
+         
+         lat = ( grid(id)%latitude(off,j)  &
+                +grid(id)%latitude(off,j)  &
+                +grid(id)%latitude(i  ,j)  &
+                +grid(id)%latitude(i  ,j)) / 4.0_r8
+
+         model_height = compute_geometric_height(geop, lat)
+
+      else
+
+         ! If not periodic, then try extrapolating
+         i1 = get_dart_vector_index(i,j  ,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i2 = get_dart_vector_index(i,j  ,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i3 = get_dart_vector_index(i,j+1,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i4 = get_dart_vector_index(i,j+1,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+
+         x_i1 = get_state(i1, state_handle)
+         x_i2 = get_state(i2, state_handle)
+         x_i3 = get_state(i3, state_handle)
+         x_i4 = get_state(i4, state_handle)
+
+         geop = minval(( 3.0_r8*(stat_dat(id)%phb(i,j  ,k  )+x_i1) &
+                 +3.0_r8*(stat_dat(id)%phb(i,j  ,k+1)+x_i2) &
+                        -(stat_dat(id)%phb(i,j+1,k  )+x_i3) &
+                        -(stat_dat(id)%phb(i,j+1,k+1)+x_i4) )/(4.0_r8*gravity))
+
+         lat = ( 3.0_r8*grid(id)%latitude(i,j  )  &
+                +3.0_r8*grid(id)%latitude(i,j  )  &
+                       -grid(id)%latitude(i,j+1)  &
+                       -grid(id)%latitude(i,j+1)) / 4.0_r8
+
+         model_height = compute_geometric_height(geop, lat)
+
+      endif
+
+   else
+
+      i1 = get_dart_vector_index(i,j  ,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+      i2 = get_dart_vector_index(i,j  ,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+      i3 = get_dart_vector_index(i,j-1,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+      i4 = get_dart_vector_index(i,j-1,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+
+      x_i1 = get_state(i1, state_handle)
+      x_i2 = get_state(i2, state_handle)
+      x_i3 = get_state(i3, state_handle)
+      x_i4 = get_state(i4, state_handle)
+
+      geop = minval(( (stat_dat(id)%phb(i,j  ,k  )+x_i1) &
+              +(stat_dat(id)%phb(i,j  ,k+1)+x_i2) &
+              +(stat_dat(id)%phb(i,j-1,k  )+x_i3) &
+              +(stat_dat(id)%phb(i,j-1,k+1)+x_i4) )/(4.0_r8*gravity))
+
+      lat = ( grid(id)%latitude(i,j  )  &
+             +grid(id)%latitude(i,j  )  &
+             +grid(id)%latitude(i,j-1)  &
+             +grid(id)%latitude(i,j-1)) / 4.0_r8
+
+      model_height = compute_geometric_height(geop, lat)
+
+   endif
+
+!elseif( var_type == wrf%dom(id)%type_mu .or. &
+!        var_type == wrf%dom(id)%type_ps .or. &
+!        var_type == wrf%dom(id)%type_tsk) then
+!
+!   model_height = stat_dat(id)%hgt(i,j)
+!
+!elseif( var_type == wrf%dom(id)%type_tslb  .or. &
+!        var_type == wrf%dom(id)%type_smois .or. &
+!        var_type == wrf%dom(id)%type_sh2o ) then
+!
+!   model_height = stat_dat(id)%hgt(i,j) - wrf%dom(id)%zs(k)
+!
+!elseif( var_type == wrf%dom(id)%type_u10 .or. &
+!        var_type == wrf%dom(id)%type_v10 ) then
+!
+!   model_height = stat_dat(id)%hgt(i,j) + 10.0_r8
+!
+!elseif( var_type == wrf%dom(id)%type_t2  .or. &
+!        var_type == wrf%dom(id)%type_th2 .or. &
+!        var_type == wrf%dom(id)%type_q2 ) then
+!
+!   model_height = stat_dat(id)%hgt(i,j) + 2.0_r8
+
+else
+
+   i1 = get_dart_vector_index(i,j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
+   i2 = get_dart_vector_index(i,j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+
+   x_i1 = get_state(i1, state_handle)
+   x_i2 = get_state(i2, state_handle)
+
+   geop = minval(( (stat_dat(id)%phb(i,j,k  )+x_i1) &
+           +(stat_dat(id)%phb(i,j,k+1)+x_i2) )/(2.0_r8*gravity))
+
+   lat = grid(id)%latitude(i,j)
+
+   model_height = compute_geometric_height(geop, lat)
+
+endif
+
+end function model_height
+
 
 
 !------------------------------------------------------------------
