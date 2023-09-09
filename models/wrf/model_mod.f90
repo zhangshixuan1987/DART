@@ -1744,27 +1744,20 @@ integer  :: var_id, state_id
 real(r8) :: vert ! vertical after conversion
 integer  :: i
 
+do i = 1, num
 
-if (which_vert == VERTISLEVEL) then
+   lon_lat_vert = get_location(locs(i))
+   call get_model_variable_indices(loc_indx(i), ip, jp, kp, var_id=var_id, dom_id=state_id)
 
-   do i = 1, num
- 
-      lon_lat_vert = get_location(locs(i))
-      call get_model_variable_indices(loc_indx(i), ip, jp, kp, var_id=var_id, dom_id=state_id)
+   if (which_vert == VERTISLEVEL) then
 
       if (on_w_grid(state_id, var_id)) then
          vert = real(kp) - 0.5_r8
       else
           vert = real(kp)
       endif
-
-       locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
-
-   enddo
- 
-elseif (which_vert == VERTISPRESSURE) then
-
-   do i = 1, num
+   
+   elseif (which_vert == VERTISPRESSURE) then
    
       lon_lat_vert = get_location(locs(i))
       call get_model_variable_indices(loc_indx(i), ip, jp, kp, var_id=var_id, dom_id=state_id)
@@ -1772,34 +1765,21 @@ elseif (which_vert == VERTISPRESSURE) then
       vert = model_pressure(ip, jp, kp, id, var_id, state_id, state_handle)
       locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
    
-   enddo
-
-
-elseif (which_vert == VERTISHEIGHT) then
-
-   do i = 1, num
+   elseif (which_vert == VERTISHEIGHT) then
    
-      lon_lat_vert = get_location(locs(i))
-      call get_model_variable_indices(loc_indx(i), ip, jp, kp, var_id=var_id, dom_id=state_id)
-
       !vert = model_height(ip, jp, kp, id, loc_qtys(i), state_handle)  ! to do
       !locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
    
-   enddo
-
-elseif (which_vert == VERTISSCALEHEIGHT) then
-
-   do i = 1, num
+   elseif (which_vert == VERTISSCALEHEIGHT) then
    
-      lon_lat_vert = get_location(locs(i))
-      call get_model_variable_indices(loc_indx(i), ip, jp, kp, var_id=var_id, dom_id=state_id)
-
-      !vert = model_scaleheight(ip, jp, kp, id, var_type, state_handle)  ! to do
-      !locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
+      !vert = -log(model_pressure(ip, jp, kp, id, var_id, state_id, state_handle) / &
+      !         model_surface_pressure_distrib(ip, jp, id, var_type, state_handle))
    
-   enddo
+   endif
 
-endif
+   locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
+
+enddo
 
 end subroutine
 
