@@ -1758,6 +1758,7 @@ do i = 1, num
 
    lon_lat_vert = get_location(locs(i))
    call get_model_variable_indices(loc_indx(i), ip, jp, kp, var_id=var_id, dom_id=state_id)
+   id = get_wrf_domain(state_id)
 
    if (which_vert == VERTISLEVEL) then
 
@@ -1769,9 +1770,6 @@ do i = 1, num
    
    elseif (which_vert == VERTISPRESSURE) then
    
-      lon_lat_vert = get_location(locs(i))
-      call get_model_variable_indices(loc_indx(i), ip, jp, kp, var_id=var_id, dom_id=state_id)
-      id = get_wrf_domain(state_id)
       vert = model_pressure(ip, jp, kp, id, var_id, state_id, state_handle)
       locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
    
@@ -1782,6 +1780,7 @@ do i = 1, num
    
    elseif (which_vert == VERTISSCALEHEIGHT) then
    
+      ! HK todo model_surface_pressure
       !vert = -log(model_pressure(ip, jp, kp, id, var_id, state_id, state_handle) / &
       !         model_surface_pressure_distrib(ip, jp, id, var_type, state_handle))
    
