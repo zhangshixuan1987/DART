@@ -77,7 +77,11 @@ use obs_kind_mod, only : get_index_for_quantity, &
                          QTY_SNOW_NUMBER_CONCENTR,      &
                          QTY_RAIN_NUMBER_CONCENTR,      &
                          QTY_GRAUPEL_NUMBER_CONCENTR,   &
-                         QTY_HAIL_NUMBER_CONCENTR 
+                         QTY_HAIL_NUMBER_CONCENTR, &
+QTY_SOIL_TEMPERATURE, &
+QTY_SOIL_MOISTURE, &
+QTY_SOIL_LIQUID_WATER
+
 
 
 
@@ -225,6 +229,7 @@ type static_data
    real(r8), allocatable :: hgt(:,:)   ! Terrain Height
    real(r8), allocatable :: dnw(:)     ! d(eta) values between full (w) level
    real(r8), allocatable :: land(:,:)  ! land mask (1 for land, 2 for water)
+   real(r8), allocatable :: zs(:)      ! depths of center of soil layers
 end type static_data
 
 ! need grid for each domain
@@ -997,6 +1002,11 @@ do i = 1, num_domains
    allocate(stat_dat(i)%land(dim_size(1), dim_size(2)))
    call nc_get_variable(ncid, 'XLAND', stat_dat(i)%land, routine)
 
+   call nc_get_variable_size(ncid, 'ZS', dim_size)
+   allocate(stat_dat(i)%zs(dim_size(1)))
+   call nc_get_variable(ncid, 'ZS', stat_dat(i)%zs, routine)
+
+
    call nc_close_file(ncid, routine)
 
 end do
@@ -1767,7 +1777,7 @@ do i = 1, num
    
    elseif (which_vert == VERTISHEIGHT) then
    
-      vert = model_height(ip, jp, kp, id, var_id, state_id, state_handle)  ! to do
+      vert = model_height(ip, jp, kp, id, loc_qtys(i), var_id, state_id, state_handle)
       locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
    
    elseif (which_vert == VERTISSCALEHEIGHT) then
@@ -1785,10 +1795,10 @@ end subroutine convert_vertical_state
 
 !------------------------------------------------------------------
 
-function model_height(i,j,k,id,var_id, state_id, state_handle)
+function model_height(i, j, k, id, qty, var_id, state_id, state_handle)
 
 type(ensemble_type), intent(in) :: state_handle
-integer,             intent(in) :: i,j,k,id
+integer,             intent(in) :: i, j, k, id, qty
 integer,             intent(in) :: var_id,state_id
 real(r8)                        :: model_height
 
@@ -1797,8 +1807,33 @@ integer      :: off
 real(r8)     :: x_i1(1), x_i2(1), x_i3(1), x_i4(1)
 real(r8)     :: geop, lat
 
+!HK todo for these special cases would it be better to check by variable name
+! instead of QTY?
+if( qty == QTY_PRESSURE .or. &             ! MU
+        qty == QTY_SURFACE_PRESSURE .or. & ! PSFC SFC PRESSUR
+        qty == QTY_SKIN_TEMPERATURE) then  ! TSK SURFACE SKIN TEMPERATURE
+
+   model_height = stat_dat(id)%hgt(i,j)
+
+elseif( qty == QTY_SOIL_TEMPERATURE  .or. &  ! TSLB SOIL TEMPERATURE
+        qty == QTY_SOIL_MOISTURE .or. &  ! SMOIS SOIL MOISTURE
+        qty == QTY_SOIL_LIQUID_WATER ) then  !  SH2O SOIL LIQUID WATER
+
+   model_height = stat_dat(id)%hgt(i,j) - stat_dat(id)%zs(k)
+
+elseif( qty == QTY_10M_U_WIND_COMPONENT .or. &
+        qty == QTY_10M_V_WIND_COMPONENT  ) then
+
+   model_height = stat_dat(id)%hgt(i,j) + 10.0_r8
+
+elseif( qty == QTY_2M_TEMPERATURE  .or. &
+        !qty == QTY_POTENTIAL_TEMPERATURE .or. & ! TH2 POT TEMP at 2 M
+        qty == QTY_2M_SPECIFIC_HUMIDITY ) then  ! Q2 QV at 2 M
+
+   model_height = stat_dat(id)%hgt(i,j) + 2.0_r8
+
 ! If W-grid (on ZNW levels), native to GZ
-if( on_w_grid(state_id, var_id) ) then
+elseif( on_w_grid(state_id, var_id) ) then
 
    i1 = get_dart_vector_index(i,j,k, state_id, QTY_GEOPOTENTIAL_HEIGHT)
    x_i1 = get_state(i1, state_handle)
@@ -2091,29 +2126,6 @@ elseif( on_v_grid(state_id, var_id) ) then
       model_height = compute_geometric_height(geop, lat)
 
    endif
-
-!elseif( var_type == wrf%dom(id)%type_mu .or. &
-!        var_type == wrf%dom(id)%type_ps .or. &
-!        var_type == wrf%dom(id)%type_tsk) then
-!
-!   model_height = stat_dat(id)%hgt(i,j)
-!
-!elseif( var_type == wrf%dom(id)%type_tslb  .or. &
-!        var_type == wrf%dom(id)%type_smois .or. &
-!        var_type == wrf%dom(id)%type_sh2o ) then
-!
-!   model_height = stat_dat(id)%hgt(i,j) - wrf%dom(id)%zs(k)
-!
-!elseif( var_type == wrf%dom(id)%type_u10 .or. &
-!        var_type == wrf%dom(id)%type_v10 ) then
-!
-!   model_height = stat_dat(id)%hgt(i,j) + 10.0_r8
-!
-!elseif( var_type == wrf%dom(id)%type_t2  .or. &
-!        var_type == wrf%dom(id)%type_th2 .or. &
-!        var_type == wrf%dom(id)%type_q2 ) then
-!
-!   model_height = stat_dat(id)%hgt(i,j) + 2.0_r8
 
 else
 
