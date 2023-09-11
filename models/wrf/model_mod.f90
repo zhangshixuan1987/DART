@@ -78,9 +78,9 @@ use obs_kind_mod, only : get_index_for_quantity, &
                          QTY_RAIN_NUMBER_CONCENTR,      &
                          QTY_GRAUPEL_NUMBER_CONCENTR,   &
                          QTY_HAIL_NUMBER_CONCENTR, &
-QTY_SOIL_TEMPERATURE, &
-QTY_SOIL_MOISTURE, &
-QTY_SOIL_LIQUID_WATER
+                         QTY_SOIL_TEMPERATURE, &
+                         QTY_SOIL_MOISTURE, &
+                         QTY_SOIL_LIQUID_WATER
 
 
 
@@ -91,7 +91,7 @@ use ensemble_manager_mod, only : ensemble_type
 use default_model_mod, only : write_model_time, &
                               init_time => fail_init_time, &
                               init_conditions => fail_init_conditions, &
-                              convert_vertical_obs, adv_1step
+                              adv_1step
 
 use         map_utils, only : latlon_to_ij, &
                               proj_info, &
@@ -1791,6 +1791,22 @@ do i = 1, num
 enddo
 
 end subroutine convert_vertical_state
+
+!------------------------------------------------------------------
+subroutine convert_vertical_obs(state_handle, num, locs, loc_qtys, loc_types, &
+                                which_vert, status)
+
+type(ensemble_type), intent(in)    :: state_handle
+integer,             intent(in)    :: num
+type(location_type), intent(inout) :: locs(num)
+integer,             intent(in)    :: loc_qtys(num)
+integer,             intent(in)    :: loc_types(num)
+integer,             intent(in)    :: which_vert
+integer,             intent(out)   :: status(num)
+
+
+end subroutine convert_vertical_obs
+
 
 !------------------------------------------------------------------
 
