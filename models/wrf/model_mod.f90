@@ -382,16 +382,16 @@ if (.not. able_to_interpolate_qty(id, qty_in) ) then
    return
 endif
 
+! horizontal location mass point
+call toGrid(xloc,i,dx,dxm)
+call toGrid(yloc,j,dy,dym)
+
 if ( bounds_check_fail() ) then
    istatus(:) = FAILED_BOUNDS_CHECK
    return
 endif
 
-! horizontal location mass point
-call toGrid(xloc,i,dx,dxm)
-call toGrid(yloc,j,dy,dym)
 call getCorners(i, j, id, qty_in, ll, ul, lr, ur, rc)
-
 
 ! vertical location
 call get_level_below_obs(which_vert, id, lon_lat_vert, ens_size, state_handle, ll, ul, lr, ur, dx, dy, dxm, dym, k, zloc, fail)
@@ -1061,6 +1061,8 @@ compute_geometric_height = (termr*geopot) / ( (termg/grav) * termr - geopot )
 end function compute_geometric_height
 
 !------------------------------------------------------------------
+! HK todo VERTISSCALEHEIGHT
+! This is mass level
 subroutine get_level_below_obs(which_vert, id, lon_lat_vert, ens_size, state_handle, &
                                ll, ul, lr, ur, dx, dy, dxm, dym, &
                                level_below, zloc, fail)
@@ -1754,6 +1756,8 @@ integer  :: var_id, state_id
 real(r8) :: vert ! vertical after conversion
 integer  :: i
 
+istatus = 0 ! can not fail
+
 do i = 1, num
 
    lon_lat_vert = get_location(locs(i))
@@ -1794,7 +1798,7 @@ end subroutine convert_vertical_state
 
 !------------------------------------------------------------------
 subroutine convert_vertical_obs(state_handle, num, locs, loc_qtys, loc_types, &
-                                which_vert, status)
+                                which_vert, istatus)
 
 type(ensemble_type), intent(in)    :: state_handle
 integer,             intent(in)    :: num
@@ -1802,8 +1806,108 @@ type(location_type), intent(inout) :: locs(num)
 integer,             intent(in)    :: loc_qtys(num)
 integer,             intent(in)    :: loc_types(num)
 integer,             intent(in)    :: which_vert
-integer,             intent(out)   :: status(num)
+integer,             intent(out)   :: istatus(num)
 
+integer  :: vert_coord_in, id
+real(r8) :: lon_lat_vert(3)
+integer  :: ll(2), ul(2), lr(2), ur(2) !(x,y) of four corners
+integer  :: i, j ! grid
+real(r8) :: xloc, yloc ! WRF i,j in the grid
+real(r8) :: dx, dxm, dy, dym ! grid fractions
+real(r8) :: zout(1), zk(1), zk1(1), geop(1), zloc(1)
+integer  :: ens_size, rc, k(1)
+logical  :: fail
+integer  :: ob ! loop variable
+
+integer, parameter :: FAILED_BOUNDS_CHECK = 144
+integer, parameter :: CANNOT_INTERPOLATE_QTY = 155
+integer, parameter :: NOT_IN_ANY_DOMAIN = 111
+integer, parameter :: VERTICAL_LOCATION_FAIL = 166
+
+ens_size = 1 ! working with the mean state
+
+do ob = 1, num
+
+   lon_lat_vert = get_location(locs(i))
+   vert_coord_in = nint(query_location(locs(i)))
+   
+   if (vert_coord_in == which_vert) then ! conversion is already done
+      istatus(i) = 0
+      cycle
+   endif
+   
+   if (lon_lat_vert(3) == VERTISUNDEF) then ! no vertical, no conversion
+      istatus(i) = 0
+      cycle
+   endif
+   
+   if (lon_lat_vert(3) == MISSING_R8) then ! vertical is missing, no conversion
+      istatus(i) = 0  ! HK todo original code does not set success for this
+      cycle
+   endif
+   
+   ! convert to which_vert
+   call get_domain_info(lon_lat_vert(1),lon_lat_vert(2),id,xloc,yloc)
+   if (id == 0) then
+      istatus(i) = NOT_IN_ANY_DOMAIN
+      cycle
+   endif
+   
+   ! horizontal location mass point
+   call toGrid(xloc,i,dx,dxm)
+   call toGrid(yloc,j,dy,dym)
+   
+   if ( bounds_check_fail() ) then
+      istatus(i) = FAILED_BOUNDS_CHECK
+      cycle
+   endif
+   
+   call getCorners(i, j, id, QTY_POTENTIAL_TEMPERATURE, ll, ul, lr, ur, rc) !HK todo what qty to pick?
+   
+   ! vertical location mass level
+   call get_level_below_obs(which_vert, id, lon_lat_vert, ens_size, state_handle, ll, ul, lr, ur, dx, dy, dxm, dym, k, zloc, fail)
+   if (fail) then
+      istatus(i) = VERTICAL_LOCATION_FAIL
+      ! set vertical?
+      cycle
+   endif
+   
+   select case (which_vert)
+   
+      case (VERTISLEVEL)
+          zout = k  !HK original code has zout = 1.0_r8 for incoming VERTISSURFACE
+
+      case (VERTISPRESSURE)
+
+        if (vert_coord_in == VERTISSURFACE) then
+           print*, 'not done'
+        else
+           zk  = pressure_interpolate(ens_size, state_handle, QTY_PRESSURE, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+           zk1 = pressure_interpolate(ens_size, state_handle, QTY_PRESSURE, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
+           zout = vertical_interpolation(ens_size, k, zloc, zk, zk1)
+        endif
+
+      case (VERTISHEIGHT)
+
+         if (vert_coord_in == VERTISSURFACE) then
+             print*, 'not done'
+         else
+            zk  = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+            zk1 = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
+            geop = vertical_interpolation(ens_size, k, zloc, zk, zk1)
+            zout = compute_geometric_height(geop(1), grid(id)%latitude(i, j))
+        endif
+
+      case (VERTISSCALEHEIGHT)
+         print*, 'not done'
+
+        
+
+   end select
+
+   locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), zout(1), which_vert)
+
+enddo
 
 end subroutine convert_vertical_obs
 
