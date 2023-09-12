@@ -17,7 +17,8 @@ use     location_mod, only : location_type, get_close_type, &
                              VERTISHEIGHT, VERTISLEVEL, VERTISPRESSURE, &
                              VERTISSURFACE, VERTISUNDEF, VERTISSCALEHEIGHT, &
                              loc_get_close => get_close, get_location, &
-                             query_location, is_vertical,  vertical_localization_on
+                             query_location, is_vertical,  vertical_localization_on, &
+                             get_dist
 
 use    utilities_mod, only : register_module, error_handler, &
                              E_ERR, E_MSG, &
@@ -665,10 +666,13 @@ real(r8),            optional, intent(out)   :: dist(:)       ! distances in rad
 type(ensemble_type), optional, intent(in)    :: state_handle
 
 character(len=*), parameter :: routine = 'get_close_obs'
-logical :: fail
+integer :: istatus(1), loc_qtys_ar(1), loc_types_ar(1), i, t_ind
+type(location_type) :: loc_ar(1)
 
-call convert_base_vertical(base_loc, fail)
-if (fail) then
+loc_ar(1) = base_loc
+! dummy qty 1 not used in convert_vertical_obs
+call convert_vertical_obs(state_handle, 1, loc_ar, (/1/), (/base_type/), vert_localization_coord, istatus)
+if (istatus(1) /= 0) then
    num_close = 0
    return
 endif
@@ -678,9 +682,19 @@ call loc_get_close(gc, base_loc, base_type, locs, loc_qtys, &
 
 if (.not. present(dist)) return
 
-!call convert_vertical_obs()
+do i = 1, num_close
+   t_ind = close_ind(i)
+   loc_ar(1) = locs(t_ind)
+   loc_qtys_ar(1) = loc_qtys(t_ind)   ! HK not used in convert_vertical_obs todo: use dummy instead?
+   loc_types_ar(1) = loc_types(t_ind) ! HK not used in convert_vertical_obs todo: use dummy instead?
 
-!call calculate_distances()
+   call convert_vertical_obs(state_handle, 1, loc_ar, loc_qtys_ar, loc_types_ar, vert_localization_coord, istatus)
+   if (istatus(1) == 0) then
+      dist(i) = get_dist(base_loc, loc_ar(1), base_type, loc_qtys(t_ind))
+   else
+      dist(i) = 1.0e9
+   endif
+enddo
 
 end subroutine get_close_obs
 
@@ -698,23 +712,33 @@ real(r8),            optional, intent(out)    :: dist(:)
 type(ensemble_type), optional, intent(in)     :: state_handle
 
 character(len=*), parameter :: routine = 'get_close_state'
-logical :: fail
+integer :: istatus(1), loc_qtys_ar(1), i, t_ind
+integer(i8) :: loc_indx_ar(1)
+type(location_type) :: loc_ar(1)
 
-call convert_base_vertical(base_loc, fail)
-if (fail) then
+loc_ar(1) = base_loc
+! dummy qty 1 not used in convert_vertical_obs
+call convert_vertical_obs(state_handle, 1, loc_ar, (/1/), (/base_type/), vert_localization_coord, istatus)
+if (istatus(1) /= 0) then
    num_close = 0
    return
 endif
 
-call loc_get_close(gc, base_loc, base_type, locs, loc_qtys, &
-                          num_close, close_ind)
+call loc_get_close(gc, base_loc, base_type, locs, loc_qtys, num_close, close_ind)
 
 if (.not. present(dist)) return
 
-!call convert_vertical_state()
+do i = 1, num_close
+   t_ind = close_ind(i)
+   loc_ar(1) = locs(t_ind)
+   loc_qtys_ar(1) = loc_qtys(t_ind)   ! HK not used in convert_vertical_state todo: use dummy instead?
+   loc_indx_ar(1) = loc_indx(t_ind)
 
-!call calculate_distances()
-
+   ! this routine always returns istatus = 0
+   call convert_vertical_state(state_handle, 1, loc_ar, loc_qtys_ar, loc_indx_ar, vert_localization_coord, istatus(1))
+   dist(i) = get_dist(base_loc, loc_ar(1), base_type, loc_qtys(t_ind))
+ 
+enddo
 
 end subroutine get_close_state
 
@@ -2443,28 +2467,6 @@ elseif (on_v_grid(state_id, var_id)) then ! average in the horizontal v directio
 endif
 
 end function model_pressure
-
-!------------------------------------------------------------------
-subroutine convert_base_vertical(base_loc, fail)
-
-type(location_type), intent(inout) :: base_loc
-logical, intent(out) :: fail
-
-integer :: base_vertical_coord
-
-if (.not. vertical_localization_on() ) then
-   fail = .false.
-   return
-endif
-
-base_vertical_coord = nint(query_location(base_loc))
-if (base_vertical_coord /= vert_localization_coord) then
-
-print*, 'not done'
-
-endif
-
-end subroutine convert_base_vertical
 
 !------------------------------------------------------------------
 function convert_indices_to_lon_lat_lev(i, j, k, var_id, state_id)
