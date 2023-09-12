@@ -134,7 +134,6 @@ public :: get_model_size,         &
 ! module variables
 character(len=256), parameter :: source   = "wrf/model_mod.f90"
 logical :: module_initialized = .false.
-type(time_type) :: assimilation_time_step
 
 integer, parameter :: MAX_STATE_VARIABLES = 100
 integer, parameter :: NUM_STATE_TABLE_COLUMNS = 4
@@ -209,6 +208,7 @@ type grid_ll
   integer :: wes, sns ! west-east staggered, south-north staggered number of grid points
   integer :: bt ! bottom-top number of grid points
   integer :: bt_stag ! staggered bottom-top number of grid points
+  real(r8) :: dt ! time step
 
   ! wrf options, apply to domain 1 only.
   logical :: polar = .false.
@@ -251,7 +251,6 @@ character(len=9) :: in_domain(MAX_STATE_VARIABLES) ! assumes <=9 or 999
 integer :: nfields
 logical, allocatable :: domain_mask(:)
 integer :: i, field ! loop indices
-integer :: model_dt, assim_dt
 character (len=1)     :: idom ! assumes <=9
 
 module_initialized = .true.
@@ -265,11 +264,6 @@ if (do_nml_file()) write(nmlfileunit, nml=model_nml)
 if (do_nml_term()) write(     *     , nml=model_nml)
 
 call set_calendar_type(calendar_type)
-
-model_dt = 1
-print*, 'FAKE model_dt', model_dt
-assim_dt = (assimilation_period_seconds / model_dt) * model_dt
-assimilation_time_step = set_time(assim_dt) ! assimilation window
 
 allocate(wrf_dom(num_domains), grid(num_domains), stat_dat(num_domains))
 
@@ -451,10 +445,17 @@ end subroutine model_interpolate
 function shortest_time_between_assimilations()
 
 type(time_type) :: shortest_time_between_assimilations
+integer :: model_dt
 
 if ( .not. module_initialized ) call static_init_model
 
-shortest_time_between_assimilations = assimilation_time_step
+model_dt = nint(grid(1)%dt) ! model time step in seconds lowest res domain
+
+if (assimilation_period_seconds < model_dt ) then
+   shortest_time_between_assimilations = set_time(model_dt)
+else
+   shortest_time_between_assimilations = set_time(assimilation_period_seconds)
+endif
 
 end function shortest_time_between_assimilations
 
@@ -952,7 +953,8 @@ do i = 1, num_domains
     call nc_get_global_attribute(ncid, 'TRUELAT1', grid(i)%truelat1)
     call nc_get_global_attribute(ncid, 'TRUELAT2', grid(i)%truelat2)
     call nc_get_global_attribute(ncid, 'STAND_LON', grid(i)%stand_lon)
-  
+    call nc_get_global_attribute(ncid, 'DT', grid(i)%dt)
+
     grid(i)%bt = nc_get_dimension_size(ncid, 'bottom_top', routine)
     grid(i)%bt_stag = nc_get_dimension_size(ncid, 'bottom_top_stag', routine)
 
