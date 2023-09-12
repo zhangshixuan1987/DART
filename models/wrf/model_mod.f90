@@ -230,8 +230,6 @@ end type static_data
 type(grid_ll), allocatable :: grid(:)
 type(static_data), allocatable :: stat_dat(:)
 
-integer(i8) :: model_size
-
 ! Physical constants
 real(r8), parameter :: rd_over_rv = gas_constant / gas_constant_v
 real(r8), parameter :: cpovcv = 1.4_r8        ! cp / (cp - gas_constant)
@@ -277,7 +275,6 @@ allocate(wrf_dom(num_domains), grid(num_domains), stat_dat(num_domains))
 
 call verify_state_variables(nfields, varname, state_qty, update_var, in_domain)
 
-model_size = 0
 allocate(domain_mask(nfields))
 
 do i = 1, num_domains
@@ -294,7 +291,6 @@ do i = 1, num_domains
                           !clamp_vals  = &
                           update_list = pack(update_var(1:nfields), domain_mask) )
    
-  model_size = model_size + get_domain_size(wrf_dom(i))
 enddo
 
 call read_grid()
@@ -311,10 +307,14 @@ end subroutine static_init_model
 function get_model_size()
 
 integer(i8) :: get_model_size
+integer :: i
 
 if ( .not. module_initialized ) call static_init_model
 
-get_model_size = model_size
+get_model_size = 0
+do i = 1, num_domains
+   get_model_size = get_model_size + get_domain_size(wrf_dom(i))
+enddo
 
 end function get_model_size
 
