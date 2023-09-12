@@ -83,10 +83,6 @@ use obs_kind_mod, only : get_index_for_quantity, &
                          QTY_SOIL_MOISTURE, &
                          QTY_SOIL_LIQUID_WATER
 
-
-
-
-
 use ensemble_manager_mod, only : ensemble_type
 
 use default_model_mod, only : write_model_time, &
@@ -147,7 +143,6 @@ integer, parameter :: NUM_BOUNDS_TABLE_COLUMNS = 4
 integer, allocatable :: wrf_dom(:) ! This needs a better name, it is the id from add_domain
                                    ! for each wrf_domain added to the state
 
-
 !-- Namelist with default values --
 logical :: default_state_variables = .true.
 character(len=NF90_MAX_NAME) :: wrf_state_variables(MAX_STATE_VARIABLES*NUM_STATE_TABLE_COLUMNS) = 'NULL'
@@ -180,11 +175,9 @@ logical :: periodic_x = .false.
 logical :: periodic_y = .false.
 
 logical :: allow_perturbed_ics = .false.
-
 !-------------------------------
 
-logical, parameter :: restrict_polar = .false. !HK what is this for?
-
+logical, parameter :: restrict_polar = .false. !HK what is this for? Hardcoded in original code
 
 namelist /model_nml/ &
 default_state_variables, &
@@ -239,7 +232,6 @@ type(static_data), allocatable :: stat_dat(:)
 
 integer(i8) :: model_size
 
-
 ! Physical constants
 real(r8), parameter :: rd_over_rv = gas_constant / gas_constant_v
 real(r8), parameter :: cpovcv = 1.4_r8        ! cp / (cp - gas_constant)
@@ -249,7 +241,6 @@ real(r8), parameter :: kappa = 2.0_r8/7.0_r8  ! gas_constant / cp
 contains
 
 !------------------------------------------------------------------
-
 subroutine static_init_model()
 
 integer  :: iunit, io
@@ -277,13 +268,10 @@ if (do_nml_term()) write(     *     , nml=model_nml)
 
 call set_calendar_type(calendar_type)
 
-! This time is both the minimum time you can ask the model to advance
-! (for models that can be advanced by filter) and it sets the assimilation
-! window.
 model_dt = 1
 print*, 'FAKE model_dt', model_dt
 assim_dt = (assimilation_period_seconds / model_dt) * model_dt
-assimilation_time_step = set_time(assim_dt)
+assimilation_time_step = set_time(assim_dt) ! assimilation window
 
 allocate(wrf_dom(num_domains), grid(num_domains), stat_dat(num_domains))
 
@@ -319,8 +307,7 @@ deallocate(domain_mask)
 end subroutine static_init_model
 
 !------------------------------------------------------------------
-! Returns the number of items in the state vector as an integer. 
-
+! Returns the number of items in the state vector as an i8 integer.
 function get_model_size()
 
 integer(i8) :: get_model_size
@@ -330,7 +317,6 @@ if ( .not. module_initialized ) call static_init_model
 get_model_size = model_size
 
 end function get_model_size
-
 
 !------------------------------------------------------------------
 subroutine model_interpolate(state_handle, ens_size, location, qty_in, expected_obs, istatus)
@@ -610,7 +596,6 @@ end function vertical_interpolation
 ! Returns the smallest increment in time that the model is capable 
 ! of advancing the state in a given implementation, or the shortest
 ! time you want the model to advance between assimilations.
-
 function shortest_time_between_assimilations()
 
 type(time_type) :: shortest_time_between_assimilations
@@ -626,7 +611,6 @@ end function shortest_time_between_assimilations
 !------------------------------------------------------------------
 ! Given an integer index into the state vector, returns the
 ! associated location and optionally the physical quantity.
-
 subroutine get_state_meta_data(index_in, location, qty_out)
 
 integer(i8),         intent(in)  :: index_in
@@ -647,9 +631,8 @@ if(present(qty_out)) qty_out = qty
 
 end subroutine get_state_meta_data
 
-
 !------------------------------------------------------------------
-! obs have a type and qty
+! observations have a type and qty
 !  observation type not taken in to account for wrf get close calculations
 subroutine get_close_obs(gc, base_loc, base_type, locs, loc_qtys, loc_types, &
                          num_close, close_ind, dist, state_handle)
@@ -734,7 +717,7 @@ do i = 1, num_close
    loc_qtys_ar(1) = loc_qtys(t_ind)   ! HK not used in convert_vertical_state todo: use dummy instead?
    loc_indx_ar(1) = loc_indx(t_ind)
 
-   ! this routine always returns istatus = 0
+   ! convert_vertical_state always returns istatus = 0
    call convert_vertical_state(state_handle, 1, loc_ar, loc_qtys_ar, loc_indx_ar, vert_localization_coord, istatus(1))
    dist(i) = get_dist(base_loc, loc_ar(1), base_type, loc_qtys(t_ind))
  
@@ -745,6 +728,7 @@ end subroutine get_close_state
 
 !------------------------------------------------------------------
 ! write any additional attributes to netcdf files
+! HK todo nc_write_model_atts
 subroutine nc_write_model_atts(ncid, domain_id)
 
 integer, intent(in) :: ncid      ! netCDF file identifier
@@ -817,9 +801,9 @@ call  nc_close_file(ncid, routine)
 end function read_model_time
 
 !------------------------------------------------------------------
-
 subroutine end_model()
 
+deallocate(wrf_dom, grid, stat_dat)
 
 end subroutine end_model
 
@@ -842,7 +826,6 @@ end subroutine get_wrf_date
 !------------------------------------------------------------------
 ! Verify that the namelist was filled in correctly, and check
 ! that there are valid entries for the dart_kind.
-
 subroutine verify_state_variables(nvar, varname, qty, update, in_domain)
 
 integer,           intent(out) :: nvar
@@ -1027,7 +1010,7 @@ do i = 1, num_domains
    call nc_get_variable(ncid, 'XLAND', stat_dat(i)%land, routine)
 
    call nc_get_variable_size(ncid, 'ZS', dim_size)
-   allocate(stat_dat(i)%zs(dim_size(1)))
+   allocate(stat_dat(i)%zs(dim_size(1))) ! soil_layers_stag
    call nc_get_variable(ncid, 'ZS', stat_dat(i)%zs, routine)
 
 
@@ -1145,16 +1128,17 @@ end select
 end subroutine get_level_below_obs
 
 !------------------------------------------------------------------
-! horizontal same across the ensemble
+! Calculate the model pressure profile on half (mass) levels,
+! horizontally interpolated at the observation location.
 subroutine get_model_pressure_profile(id, ll, ul, lr, ur, dx, dy, dxm, dym, &
                                       ens_size, state_handle, v_p)
 
-integer,  intent(in)  :: id
-integer, dimension(2), intent(in)  :: ll, ul, lr, ur ! (x,y) mass grid corners
-real(r8), intent(in)  :: dx, dy, dxm, dym
-integer, intent(in)   :: ens_size
+integer,  intent(in)             :: id
+integer,  intent(in)             :: ll(2), ul(2), lr(2), ur(2) ! (x,y) mass grid corners
+real(r8), intent(in)             :: dx, dy, dxm, dym
+integer,  intent(in)             :: ens_size
 type(ensemble_type), intent(in)  :: state_handle
-real(r8), intent(out) :: v_p(0:grid(id)%bt, ens_size)
+real(r8),            intent(out) :: v_p(0:grid(id)%bt, ens_size)
 
 integer(i8)           :: ill, ilr, iul, iur
 real(r8), dimension(ens_size) :: x_ill, x_ilr, x_iul, x_iur
@@ -1250,10 +1234,9 @@ model_pressure_t(:) = ps0 * ( (gas_constant*(ts0+x_it)*qvf1) / &
 end function model_pressure_t
 
 !------------------------------------------------------------------
-subroutine pres_to_zk(pres, mdl_v, n3, zk, lev0)
-
 ! Calculate the model level "zk" on half (mass) levels,
 ! corresponding to pressure "pres"
+subroutine pres_to_zk(pres, mdl_v, n3, zk, lev0)
 
 real(r8), intent(in)  :: pres
 real(r8), intent(in)  :: mdl_v(0:n3)
@@ -1296,12 +1279,9 @@ enddo
 end subroutine pres_to_zk
 
 !------------------------------------------------------------------
-
-subroutine get_model_height_profile(ll, ul, lr, ur, dx, dy, dxm, dym, id, v_h, state_handle, ens_size)
-
-
 ! Calculate the model height profile on half (mass) levels,
 ! horizontally interpolated at the observation location.
+subroutine get_model_height_profile(ll, ul, lr, ur, dx, dy, dxm, dym, id, v_h, state_handle, ens_size)
 
 integer, dimension(2), intent(in)  :: ll, ul, lr, ur ! (x,y) mass grid corners
 integer,  intent(in)  :: id
@@ -1361,11 +1341,9 @@ v_h(0, :) = dym*( dxm*stat_dat(id)%hgt(ll(1), ll(2)) + &
 end subroutine get_model_height_profile
 
 !------------------------------------------------------------------
-
+! Calculate the model level zk on half (mass) levels,
+! corresponding to height obs_v.
 subroutine height_to_zk(obs_v, mdl_v, n3, zk, level_below, lev0)
-
-! Calculate the model level "zk" on half (mass) levels,
-! corresponding to height "obs_v".
 
 real(r8), intent(in)  :: obs_v
 integer,  intent(in)  :: n3
@@ -1405,13 +1383,15 @@ enddo
 end subroutine height_to_zk
 
 !------------------------------------------------------------------
-
+! Interpolate pressure inside quad
+! Four corners of a quad:
+!   p1 lower left
+!   p2 lower right
+!   p3 upper left
+!   p4 upper right
+! dx is the distance in x, dxm is 1.0-dx
+! dy is distance in y, dym is 1.0-dy
 function interp_4pressure(p1, p2, p3, p4, dx, dxm, dy, dym, ens_size)
- 
-! given 4 corners of a quad, where the p1, p2, p3 and p4 points are
-! respectively:  lower left, lower right, upper left, upper right
-! and dx is the distance in x, dxm is 1.0-dx, dy is distance in y
-! and dym is 1.0-dy, interpolate the pressure while converted to log.
 
 integer, intent(in)                :: ens_size
 real(r8), intent(in)               :: p1(ens_size), p2(ens_size), p3(ens_size), p4(ens_size)
@@ -1439,14 +1419,8 @@ endif
 end function interp_4pressure
 
 !------------------------------------------------------------------
-
+! extrapolate quad where edgep is the edge pressure
 function extrap_4pressure(p1, p2, p3, p4, dx, dxm, dy, dym, ens_size, edgep)
- 
-! given 4 corners of a quad, where the p1, p2, p3 and p4 points are
-! respectively:  lower left, lower right, upper left, upper right
-! and dx is the distance in x, dxm is 1.0-dx, dy is distance in y
-! and dym is 1.0-dy, extrapolate where edgep is the edge pressure
-! and the 4 points and dx/dy give the location of the inner point.
 
 integer, intent(in)                :: ens_size
 real(r8), intent(in)               :: p1(ens_size), p2(ens_size), p3(ens_size), p4(ens_size)
@@ -1482,9 +1456,8 @@ endif
 end function extrap_4pressure
 
 !------------------------------------------------------------------
-function model_rho_t(i,j,k,id,state_handle, ens_size)
-
 ! Calculate the total density on mass point (half (mass) levels, T-point).
+function model_rho_t(i,j,k,id,state_handle, ens_size)
 
 integer,             intent(in)  :: ens_size
 integer,             intent(in)  :: i,j,k(ens_size),id
@@ -1517,8 +1490,7 @@ call get_state_array(x_iphp1, iphp1, state_handle)
 ph_e = ( (x_iphp1 + stat_dat(id)%phb(i,j,k+1)) &
        - (x_iph   + stat_dat(id)%phb(i,j,k  )) ) / stat_dat(id)%dnw(k)
 
-!! now calculate rho = - mu / dphi/deta
-
+! rho = - mu / dphi/deta
 model_rho_t(:) = - (stat_dat(id)%mub(i,j)+x_imu) / ph_e
 
 end function model_rho_t
@@ -1566,7 +1538,6 @@ surface_type_interpolate(:) = -1 + dym*( dxm*stat_dat(id)%land(ll(1), ll(2))    
 end function surface_type_interpolate
 
 !------------------------------------------------------------------
-
 function surface_elevation_interpolate(ens_size, id, ll, ul, lr, ur, dxm, dx, dy, dym)
 
 integer,             intent(in) :: ens_size
@@ -1583,7 +1554,6 @@ surface_elevation_interpolate(:) = dym*( dxm*stat_dat(id)%hgt(ll(1), ll(2))     
 end function surface_elevation_interpolate
 
 !------------------------------------------------------------------
-
 function geopotential_height_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
 integer,             intent(in) :: ens_size
@@ -1610,8 +1580,6 @@ geopotential_height_interpolate = ( a1 + &
 end function geopotential_height_interpolate
 
 !------------------------------------------------------------------
-
-
 function temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
 integer,             intent(in) :: ens_size
@@ -1642,7 +1610,6 @@ temperature_interpolate = (ts0 + a1(:))*(pres(:)/ps0)**kappa
 end function temperature_interpolate
 
 !------------------------------------------------------------------
-
 function pressure_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
 integer,             intent(in) :: ens_size
@@ -1669,7 +1636,6 @@ pressure_interpolate = dym*( dxm*pres1 + dx*pres2 ) + dy*( dxm*pres3 + dx*pres4 
 end function pressure_interpolate
 
 !------------------------------------------------------------------
-
 function specific_humidity_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
 integer,             intent(in) :: ens_size
@@ -1690,7 +1656,6 @@ specific_humidity_interpolate = a1(:) /(1.0_r8 + a1(:))
 end function specific_humidity_interpolate
 
 !------------------------------------------------------------------
-
 function wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, i, j, lon)
 
 integer,             intent(in) :: ens_size
@@ -1935,9 +1900,7 @@ enddo
 
 end subroutine convert_vertical_obs
 
-
 !------------------------------------------------------------------
-
 function model_height(i, j, k, id, qty, var_id, state_id, state_handle)
 
 type(ensemble_type), intent(in) :: state_handle
@@ -2289,8 +2252,6 @@ endif
 
 end function model_height
 
-
-
 !------------------------------------------------------------------
 pure function interp_pressure(p1, p2, use_log)
 
@@ -2325,7 +2286,6 @@ if (use_log) then
 endif
 
 end function extrap_pressure
-
 
 !------------------------------------------------------------------
 function model_pressure(i, j, kp, id, var_id, state_id, state_handle)
@@ -2982,28 +2942,22 @@ end subroutine getCorners
 
 
 !------------------------------------------------------------------
-
-subroutine toGrid (x, j, dx, dxm)
-
 !  Transfer obs. x to grid j and calculate its
 !  distance to grid j and j+1
+subroutine toGrid (x, j, dx, dxm)
 
 real(r8), intent(in)  :: x
 real(r8), intent(out) :: dx, dxm
 integer,  intent(out) :: j
 
-j = int (x)
-
-dx = x - real (j)
-
+j = int(x)
+dx = x - real(j)  ! HK todo this should be real(j, KIND=r8)?
 dxm= 1.0_r8 - dx
 
 end subroutine toGrid
 
 !------------------------------------------------------------------
 subroutine setup_map_projection(id)
-
-! id:   input, domain id
 
 integer, intent(in)   :: id
 logical, parameter    :: debug = .false.
@@ -3029,7 +2983,6 @@ call map_init(grid(id)%proj)
 !   latinc = 180.0_r8/wrf%dom(id)%sn
 !   loninc = 360.0_r8/wrf%dom(id)%we
 !endif
-
 
 latinc = 180.0_r8/size(grid(id)%longitude(:,1)) ! west_east
 loninc = 360.0_r8/size(grid(id)%longitude(1,:)) ! north_south
