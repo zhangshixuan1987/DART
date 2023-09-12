@@ -444,154 +444,6 @@ istatus(:) = 0
 
 end subroutine model_interpolate
 
-
-!------------------------------------------------------------------
-function force_non_negative_if_required(n, qty, fld)
-
-integer,  intent(in) :: n
-integer,  intent(in) :: qty
-real(r8), intent(in) :: fld(n)
-
-real(r8) :: force_non_negative_if_required(n)
-
-select case (qty)
-   case (QTY_RAINWATER_MIXING_RATIO,    &
-         QTY_GRAUPEL_MIXING_RATIO,      &
-         QTY_HAIL_MIXING_RATIO,         &
-         QTY_SNOW_MIXING_RATIO,         &
-         QTY_ICE_MIXING_RATIO,          &
-         QTY_CLOUDWATER_MIXING_RATIO,   &
-         QTY_DROPLET_NUMBER_CONCENTR,   &
-         QTY_ICE_NUMBER_CONCENTRATION,  &
-         QTY_SNOW_NUMBER_CONCENTR,      &
-         QTY_RAIN_NUMBER_CONCENTR,      &
-         QTY_GRAUPEL_NUMBER_CONCENTR,   &
-         QTY_HAIL_NUMBER_CONCENTR )
-      force_non_negative_if_required = max(0.0_r8, fld)
-   case default
-      force_non_negative_if_required = fld
-end select
-
-end function force_non_negative_if_required
-
-!------------------------------------------------------------------
-function surface_qty(qty)
-
-integer, intent(in) :: qty
-logical :: surface_qty
-
-select case (qty)
-
-   case (QTY_2M_TEMPERATURE, &
-         QTY_2M_SPECIFIC_HUMIDITY, &
-         QTY_10M_U_WIND_COMPONENT, &
-         QTY_10M_V_WIND_COMPONENT, &
-         QTY_SURFACE_TYPE, &
-         QTY_SKIN_TEMPERATURE)
-      surface_qty = .true.
-   case default
-      surface_qty = .false.
-
-end select
-
-end function surface_qty
-!------------------------------------------------------------------
-! WRF has separate model qtys for surface variables
-function update_qty_if_location_is_surface(qty_in, location) result(qty)
-
-integer, intent(in) :: qty_in
-type(location_type), intent(in) :: location
-integer :: qty
-
-if (.not. is_vertical(location,"SURFACE")) then
-   qty = qty_in
-   return
-endif
-
-select case (qty)
-
-   case (QTY_U_WIND_COMPONENT); qty = QTY_10M_U_WIND_COMPONENT 
-   case (QTY_V_WIND_COMPONENT); qty = QTY_10M_V_WIND_COMPONENT
-   case (QTY_POTENTIAL_TEMPERATURE); qty = QTY_2M_TEMPERATURE
-   case (QTY_SPECIFIC_HUMIDITY); qty = QTY_2M_SPECIFIC_HUMIDITY
-   case (QTY_VAPOR_MIXING_RATIO); qty = QTY_2M_SPECIFIC_HUMIDITY  ! Vapor Mixing Ratio (QV, Q2)  
-
-end select
-
-end function update_qty_if_location_is_surface
-
-!------------------------------------------------------------------
-function simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
-
-integer,             intent(in) :: ens_size
-type(ensemble_type), intent(in) :: state_handle
-integer,             intent(in) :: qty
-integer,             intent(in) :: id
-integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
-integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
-real(r8),            intent(in) :: dxm, dx, dy, dym
-
-real(r8) ::  simple_interpolation(ens_size)
-
-integer :: e ! loop variable
-! lower left, upper left, lower right, upper right
-integer(i8), dimension(ens_size)  :: ill, iul, ilr, iur  ! dart index at four corners
-real(r8),    dimension(ens_size)  :: x_ill, x_iul, x_ilr, x_iur ! state value at four corners
-integer :: var_id
-
-
-var_id = get_varid_from_kind(wrf_dom(id), qty)
-
-do e = 1, ens_size
-                              !   x,     y,     z,    domain,      variable
-   ill(e) = get_dart_vector_index(ll(1), ll(2), k(e), wrf_dom(id), var_id)
-   iul(e) = get_dart_vector_index(ul(1), ul(2), k(e), wrf_dom(id), var_id)
-   ilr(e) = get_dart_vector_index(lr(1), lr(2), k(e), wrf_dom(id), var_id)
-   iur(e) = get_dart_vector_index(ur(1), ur(2), k(e), wrf_dom(id), var_id)
-
-enddo
-
-call get_state_array(x_ill, ill, state_handle)
-call get_state_array(x_iul, iul, state_handle)
-call get_state_array(x_ilr, ilr, state_handle)
-call get_state_array(x_iur, iur, state_handle)
-
-simple_interpolation = dym*( dxm*x_ill(:) + dx*x_ilr(:) ) + dy*( dxm*x_iul(:) + dx*x_iur(:) )
-
-end function simple_interpolation
-
-!------------------------------------------------------------------
-function vertical_interpolation(ens_size, k, zloc, fld1, fld2)
-
-integer,  intent(in) :: ens_size
-integer,  intent(in) :: k(ens_size)
-real(r8), intent(in) :: zloc(ens_size)
-real(r8), intent(in) :: fld1(ens_size), fld2(ens_size)
-
-real(r8) :: vertical_interpolation(ens_size)
-
-real(r8) :: dz, dzm
-integer  :: z ! level
-integer :: e
-
-do e = 1, ens_size
-   call toGrid(zloc(e), z, dz, dzm)
-   ! comment from original code:
-   ! If you get here and zloc < 1.0, then z will be 0, and
-   ! we should extrapolate.  fld(1,:) and fld(2,:) where computed
-   ! at levels 1 and 2.
-
-   if (z >= 1) then
-      ! Linearly interpolate between levels
-      vertical_interpolation(e) = dzm*fld1(e) + dz*fld2(e)
-   else
-      ! Extrapolate below first level.
-      vertical_interpolation(e) = fld1(e) - (fld2(e)-fld1(e))*dzm
-   endif
-enddo
-
-
-end function vertical_interpolation
 !------------------------------------------------------------------
 ! Returns the smallest increment in time that the model is capable 
 ! of advancing the state in a given implementation, or the shortest
@@ -605,8 +457,6 @@ if ( .not. module_initialized ) call static_init_model
 shortest_time_between_assimilations = assimilation_time_step
 
 end function shortest_time_between_assimilations
-
-
 
 !------------------------------------------------------------------
 ! Given an integer index into the state vector, returns the
@@ -808,7 +658,156 @@ deallocate(wrf_dom, grid, stat_dat)
 end subroutine end_model
 
 !------------------------------------------------------------------
-!----------------------------------------------------------------------
+! end of public routines
+!------------------------------------------------------------------
+function force_non_negative_if_required(n, qty, fld)
+
+integer,  intent(in) :: n
+integer,  intent(in) :: qty
+real(r8), intent(in) :: fld(n)
+
+real(r8) :: force_non_negative_if_required(n)
+
+select case (qty)
+   case (QTY_RAINWATER_MIXING_RATIO,    &
+         QTY_GRAUPEL_MIXING_RATIO,      &
+         QTY_HAIL_MIXING_RATIO,         &
+         QTY_SNOW_MIXING_RATIO,         &
+         QTY_ICE_MIXING_RATIO,          &
+         QTY_CLOUDWATER_MIXING_RATIO,   &
+         QTY_DROPLET_NUMBER_CONCENTR,   &
+         QTY_ICE_NUMBER_CONCENTRATION,  &
+         QTY_SNOW_NUMBER_CONCENTR,      &
+         QTY_RAIN_NUMBER_CONCENTR,      &
+         QTY_GRAUPEL_NUMBER_CONCENTR,   &
+         QTY_HAIL_NUMBER_CONCENTR )
+      force_non_negative_if_required = max(0.0_r8, fld)
+   case default
+      force_non_negative_if_required = fld
+end select
+
+end function force_non_negative_if_required
+
+!------------------------------------------------------------------
+function surface_qty(qty)
+
+integer, intent(in) :: qty
+logical :: surface_qty
+
+select case (qty)
+
+   case (QTY_2M_TEMPERATURE, &
+         QTY_2M_SPECIFIC_HUMIDITY, &
+         QTY_10M_U_WIND_COMPONENT, &
+         QTY_10M_V_WIND_COMPONENT, &
+         QTY_SURFACE_TYPE, &
+         QTY_SKIN_TEMPERATURE)
+      surface_qty = .true.
+   case default
+      surface_qty = .false.
+
+end select
+
+end function surface_qty
+
+!------------------------------------------------------------------
+! WRF has separate model qtys for surface variables
+function update_qty_if_location_is_surface(qty_in, location) result(qty)
+
+integer, intent(in) :: qty_in
+type(location_type), intent(in) :: location
+integer :: qty
+
+if (.not. is_vertical(location,"SURFACE")) then
+   qty = qty_in
+   return
+endif
+
+select case (qty)
+
+   case (QTY_U_WIND_COMPONENT); qty = QTY_10M_U_WIND_COMPONENT
+   case (QTY_V_WIND_COMPONENT); qty = QTY_10M_V_WIND_COMPONENT
+   case (QTY_POTENTIAL_TEMPERATURE); qty = QTY_2M_TEMPERATURE
+   case (QTY_SPECIFIC_HUMIDITY); qty = QTY_2M_SPECIFIC_HUMIDITY
+   case (QTY_VAPOR_MIXING_RATIO); qty = QTY_2M_SPECIFIC_HUMIDITY  ! Vapor Mixing Ratio (QV, Q2)
+
+end select
+
+end function update_qty_if_location_is_surface
+
+!------------------------------------------------------------------
+function simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+
+integer,             intent(in) :: ens_size
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: qty
+integer,             intent(in) :: id
+integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
+real(r8),            intent(in) :: dxm, dx, dy, dym
+
+real(r8) ::  simple_interpolation(ens_size)
+
+integer :: e ! loop variable
+! lower left, upper left, lower right, upper right
+integer(i8), dimension(ens_size)  :: ill, iul, ilr, iur  ! dart index at four corners
+real(r8),    dimension(ens_size)  :: x_ill, x_iul, x_ilr, x_iur ! state value at four corners
+integer :: var_id
+
+
+var_id = get_varid_from_kind(wrf_dom(id), qty)
+
+do e = 1, ens_size
+                              !   x,     y,     z,    domain,      variable
+   ill(e) = get_dart_vector_index(ll(1), ll(2), k(e), wrf_dom(id), var_id)
+   iul(e) = get_dart_vector_index(ul(1), ul(2), k(e), wrf_dom(id), var_id)
+   ilr(e) = get_dart_vector_index(lr(1), lr(2), k(e), wrf_dom(id), var_id)
+   iur(e) = get_dart_vector_index(ur(1), ur(2), k(e), wrf_dom(id), var_id)
+
+enddo
+
+call get_state_array(x_ill, ill, state_handle)
+call get_state_array(x_iul, iul, state_handle)
+call get_state_array(x_ilr, ilr, state_handle)
+call get_state_array(x_iur, iur, state_handle)
+
+simple_interpolation = dym*( dxm*x_ill(:) + dx*x_ilr(:) ) + dy*( dxm*x_iul(:) + dx*x_iur(:) )
+
+end function simple_interpolation
+
+!------------------------------------------------------------------
+function vertical_interpolation(ens_size, k, zloc, fld1, fld2)
+
+integer,  intent(in) :: ens_size
+integer,  intent(in) :: k(ens_size)
+real(r8), intent(in) :: zloc(ens_size)
+real(r8), intent(in) :: fld1(ens_size), fld2(ens_size)
+
+real(r8) :: vertical_interpolation(ens_size)
+
+real(r8) :: dz, dzm
+integer  :: z ! level
+integer :: e
+
+do e = 1, ens_size
+   call toGrid(zloc(e), z, dz, dzm)
+   ! comment from original code:
+   ! If you get here and zloc < 1.0, then z will be 0, and
+   ! we should extrapolate.  fld(1,:) and fld(2,:) where computed
+   ! at levels 1 and 2.
+
+   if (z >= 1) then
+      ! Linearly interpolate between levels
+      vertical_interpolation(e) = dzm*fld1(e) + dz*fld2(e)
+   else
+      ! Extrapolate below first level.
+      vertical_interpolation(e) = fld1(e) - (fld2(e)-fld1(e))*dzm
+   endif
+enddo
+
+end function vertical_interpolation
+
+!------------------------------------------------------------------
 subroutine get_wrf_date(tstring, year, month, day, hour, minute, second)
 
 character(len=19), intent(in)  :: tstring ! YYYY-MM-DD_hh:mm:ss
@@ -1191,7 +1190,7 @@ else !extrapolate v_p(0:,) from pressure level 2 and v_p(1:,:)
   v_p(0,:) = extrap_4pressure(lev2_pres1(:), lev2_pres2(:), lev2_pres3(:), lev2_pres4(:), dx, dxm, dy, dym, ens_size, &
                               edgep=v_p(1,:))
 
- endif
+endif
 
 end subroutine get_model_pressure_profile
 
@@ -3033,4 +3032,3 @@ print*, 'Do vortex'
 end subroutine vortex
 
 end module model_mod
-
