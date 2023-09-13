@@ -1105,8 +1105,8 @@ real(r8), intent(out) :: zloc(ens_size) ! vertical location of the obs for each 
 logical,  intent(out) :: fail
 
 integer :: e ! loop variable
-real(r8) :: v_p(grid(id)%bt,ens_size)
-real(r8) :: v_h(grid(id)%bt,ens_size)
+real(r8) :: v_p(0:grid(id)%bt,ens_size)
+real(r8) :: v_h(0:grid(id)%bt,ens_size)
 logical :: lev0
 
 fail = .false.
