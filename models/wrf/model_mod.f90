@@ -131,6 +131,10 @@ public :: get_model_size,         &
           shortest_time_between_assimilations, &
           write_model_time
 
+! for wrf_dart_obs_preprocess.f90
+public :: get_domain_info
+
+
 ! module variables
 character(len=256), parameter :: source   = "wrf/model_mod.f90"
 logical :: module_initialized = .false.
