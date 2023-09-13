@@ -2042,6 +2042,9 @@ integer(i8)  :: i1, i2, i3, i4
 integer      :: off
 real(r8)     :: x_i1(1), x_i2(1), x_i3(1), x_i4(1)
 real(r8)     :: geop, lat
+integer      :: gz_id
+
+gz_id = get_varid_from_kind(state_id, QTY_GEOPOTENTIAL_HEIGHT)
 
 !HK todo for these special cases would it be better to check by variable name
 ! instead of QTY?
@@ -2071,7 +2074,7 @@ elseif( qty == QTY_2M_TEMPERATURE  .or. &
 ! If W-grid (on ZNW levels), native to GZ
 elseif( on_w_grid(state_id, var_id) ) then
 
-   i1 = get_dart_vector_index(i,j,k, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+   i1 = get_dart_vector_index(i,j,k, state_id, gz_id)
    x_i1 = get_state(i1, state_handle)
 
    geop = stat_dat(id)%phb(i,j,k)+x_i1(1)/gravity
@@ -2087,10 +2090,10 @@ elseif( on_u_grid(state_id, var_id) ) then
       if ( grid(id)%periodic_x ) then
 
          ! We are at the seam in longitude, so take first and last mass points
-         i1 = get_dart_vector_index(i-1,j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i2 = get_dart_vector_index(i-1,j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i3 = get_dart_vector_index(1,  j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i4 = get_dart_vector_index(1,  j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i1 = get_dart_vector_index(i-1,j,k  , state_id, gz_id)
+         i2 = get_dart_vector_index(i-1,j,k+1, state_id, gz_id)
+         i3 = get_dart_vector_index(1,  j,k  , state_id, gz_id)
+         i4 = get_dart_vector_index(1,  j,k+1, state_id, gz_id)
 
          x_i1 = get_state(i1, state_handle)
          x_i2 = get_state(i2, state_handle)
@@ -2113,8 +2116,8 @@ elseif( on_u_grid(state_id, var_id) ) then
       else
 
          ! If not periodic, then try extrapolating
-         i1 = get_dart_vector_index(i-1,j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i2 = get_dart_vector_index(i-1,j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i1 = get_dart_vector_index(i-1,j,k  , state_id, gz_id)
+         i2 = get_dart_vector_index(i-1,j,k+1, state_id, gz_id)
 
          x_i1 = get_state(i1, state_handle)
          x_i2 = get_state(i2, state_handle)
@@ -2143,10 +2146,10 @@ elseif( on_u_grid(state_id, var_id) ) then
 
          ! We are at the seam in longitude, so take first and last mass points
          off = grid(id)%we
-         i1 = get_dart_vector_index(i  ,j,k  ,state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i2 = get_dart_vector_index(i  ,j,k+1,state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i3 = get_dart_vector_index(off,j,k  ,state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i4 = get_dart_vector_index(off,j,k+1,state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i1 = get_dart_vector_index(i  ,j,k  ,state_id, gz_id)
+         i2 = get_dart_vector_index(i  ,j,k+1,state_id, gz_id)
+         i3 = get_dart_vector_index(off,j,k  ,state_id, gz_id)
+         i4 = get_dart_vector_index(off,j,k+1,state_id, gz_id)
 
          x_i1 = get_state(i1, state_handle)
          x_i2 = get_state(i2, state_handle)
@@ -2168,8 +2171,8 @@ elseif( on_u_grid(state_id, var_id) ) then
       else
 
          ! If not periodic, then try extrapolating
-         i1 = get_dart_vector_index(i,j,k  ,state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i2 = get_dart_vector_index(i,j,k+1,state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i1 = get_dart_vector_index(i,j,k  ,state_id, gz_id)
+         i2 = get_dart_vector_index(i,j,k+1,state_id, gz_id)
 
          x_i1 = get_state(i1, state_handle)
          x_i2 = get_state(i2, state_handle)
@@ -2193,8 +2196,8 @@ elseif( on_u_grid(state_id, var_id) ) then
 
    else
 
-      i1 = get_dart_vector_index(i,j,k  ,state_id, QTY_GEOPOTENTIAL_HEIGHT)
-      i2 = get_dart_vector_index(i,j,k+1,state_id, QTY_GEOPOTENTIAL_HEIGHT)
+      i1 = get_dart_vector_index(i,j,k  ,state_id, gz_id)
+      i2 = get_dart_vector_index(i,j,k+1,state_id, gz_id)
 
       x_i1 = get_state(i1, state_handle)
       x_i2 = get_state(i2, state_handle)
@@ -2229,10 +2232,10 @@ elseif( on_v_grid(state_id, var_id) ) then
          off = i + grid(id)%we/2
          if ( off > grid(id)%we ) off = off - grid(id)%we
 
-         i1 = get_dart_vector_index(off,j-1,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i2 = get_dart_vector_index(off,j-1,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i3 = get_dart_vector_index(i  ,j-1,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i4 = get_dart_vector_index(i  ,j-1,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i1 = get_dart_vector_index(off,j-1,k  , state_id, gz_id)
+         i2 = get_dart_vector_index(off,j-1,k+1, state_id, gz_id)
+         i3 = get_dart_vector_index(i  ,j-1,k  , state_id, gz_id)
+         i4 = get_dart_vector_index(i  ,j-1,k+1, state_id, gz_id)
 
          x_i1 = get_state(i1, state_handle)
          x_i2 = get_state(i2, state_handle)
@@ -2254,10 +2257,10 @@ elseif( on_v_grid(state_id, var_id) ) then
       else
 
          ! If not periodic, then try extrapolating
-         i1 = get_dart_vector_index(i,j-1,k ,  state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i2 = get_dart_vector_index(i,j-1,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i3 = get_dart_vector_index(i,j-2,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i4 = get_dart_vector_index(i,j-2,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i1 = get_dart_vector_index(i,j-1,k ,  state_id, gz_id)
+         i2 = get_dart_vector_index(i,j-1,k+1, state_id, gz_id)
+         i3 = get_dart_vector_index(i,j-2,k  , state_id, gz_id)
+         i4 = get_dart_vector_index(i,j-2,k+1, state_id, gz_id)
 
          x_i1 = get_state(i1, state_handle)
          x_i2 = get_state(i2, state_handle)
@@ -2288,10 +2291,10 @@ elseif( on_v_grid(state_id, var_id) ) then
          if ( off > grid(id)%we ) off = off - grid(id)%we
          if ( off > grid(id)%we ) off = off - grid(id)%we
 
-         i1 = get_dart_vector_index(off,j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i2 = get_dart_vector_index(off,j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i3 = get_dart_vector_index(i  ,j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i4 = get_dart_vector_index(i  ,j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i1 = get_dart_vector_index(off,j,k  , state_id, gz_id)
+         i2 = get_dart_vector_index(off,j,k+1, state_id, gz_id)
+         i3 = get_dart_vector_index(i  ,j,k  , state_id, gz_id)
+         i4 = get_dart_vector_index(i  ,j,k+1, state_id, gz_id)
 
          x_i1 = get_state(i1, state_handle)
          x_i2 = get_state(i2, state_handle)
@@ -2313,10 +2316,10 @@ elseif( on_v_grid(state_id, var_id) ) then
       else
 
          ! If not periodic, then try extrapolating
-         i1 = get_dart_vector_index(i,j  ,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i2 = get_dart_vector_index(i,j  ,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i3 = get_dart_vector_index(i,j+1,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-         i4 = get_dart_vector_index(i,j+1,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+         i1 = get_dart_vector_index(i,j  ,k  , state_id, gz_id)
+         i2 = get_dart_vector_index(i,j  ,k+1, state_id, gz_id)
+         i3 = get_dart_vector_index(i,j+1,k  , state_id, gz_id)
+         i4 = get_dart_vector_index(i,j+1,k+1, state_id, gz_id)
 
          x_i1 = get_state(i1, state_handle)
          x_i2 = get_state(i2, state_handle)
@@ -2339,10 +2342,10 @@ elseif( on_v_grid(state_id, var_id) ) then
 
    else
 
-      i1 = get_dart_vector_index(i,j  ,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-      i2 = get_dart_vector_index(i,j  ,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
-      i3 = get_dart_vector_index(i,j-1,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-      i4 = get_dart_vector_index(i,j-1,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+      i1 = get_dart_vector_index(i,j  ,k  , state_id, gz_id)
+      i2 = get_dart_vector_index(i,j  ,k+1, state_id, gz_id)
+      i3 = get_dart_vector_index(i,j-1,k  , state_id, gz_id)
+      i4 = get_dart_vector_index(i,j-1,k+1, state_id, gz_id)
 
       x_i1 = get_state(i1, state_handle)
       x_i2 = get_state(i2, state_handle)
@@ -2365,8 +2368,8 @@ elseif( on_v_grid(state_id, var_id) ) then
 
 else
 
-   i1 = get_dart_vector_index(i,j,k  , state_id, QTY_GEOPOTENTIAL_HEIGHT)
-   i2 = get_dart_vector_index(i,j,k+1, state_id, QTY_GEOPOTENTIAL_HEIGHT)
+   i1 = get_dart_vector_index(i,j,k  , state_id, gz_id)
+   i2 = get_dart_vector_index(i,j,k+1, state_id, gz_id)
 
    x_i1 = get_state(i1, state_handle)
    x_i2 = get_state(i2, state_handle)
