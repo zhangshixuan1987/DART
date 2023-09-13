@@ -224,6 +224,7 @@ type static_data
    real(r8), allocatable :: dnw(:)     ! d(eta) values between full (w) level
    real(r8), allocatable :: land(:,:)  ! land mask (1 for land, 2 for water)
    real(r8), allocatable :: zs(:)      ! depths of center of soil layers
+   real(r8)              :: p_top      ! Pressure top of the model
 end type static_data
 
 ! need grid for each domain
@@ -407,8 +408,10 @@ select case (qty)
    case (QTY_VAPOR_MIXING_RATIO)
       fld_k1(:) = surface_type_interpolate(ens_size, id, ll, ul, lr, ur, dxm, dx, dy, dym)
    case (QTY_PRESSURE)
-      fld_k1 = pressure_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
-      fld_k2 = pressure_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
+      fld_k1 = pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+      fld_k2 = pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
+   case (QTY_SURFACE_PRESSURE)
+      fld_k1 = surface_pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, dxm, dx, dy, dym)
    case (QTY_VORTEX_LAT, QTY_VORTEX_LON, QTY_VORTEX_PMIN, QTY_VORTEX_WMAX)
       call vortex()
    case (QTY_GEOPOTENTIAL_HEIGHT)
@@ -422,6 +425,7 @@ select case (qty)
    case (QTY_SKIN_TEMPERATURE, QTY_10M_U_WIND_COMPONENT, QTY_10M_V_WIND_COMPONENT, QTY_2M_TEMPERATURE, QTY_2M_SPECIFIC_HUMIDITY)
       fld_k1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
    case default ! simple interpolation
+      ! HK todo 2D variables
       fld_k1(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
       fld_k2(:) = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
 end select
@@ -690,10 +694,18 @@ end select
 end function force_non_negative_if_required
 
 !------------------------------------------------------------------
+! 2D surface variables, or soil variables (z = soil_layers_stag)
 function surface_qty(qty)
 
 integer, intent(in) :: qty
 logical :: surface_qty
+
+!var_id get_varid_from_kind(wrf_dom(id), qty)
+! HK todo soil_layers_sta
+!do i = 1, get_num_dims(var_id)
+!if () then
+!get_dim_name
+!endif
 
 select case (qty)
 
@@ -731,6 +743,7 @@ select case (qty)
    case (QTY_POTENTIAL_TEMPERATURE); qty = QTY_2M_TEMPERATURE
    case (QTY_SPECIFIC_HUMIDITY); qty = QTY_2M_SPECIFIC_HUMIDITY
    case (QTY_VAPOR_MIXING_RATIO); qty = QTY_2M_SPECIFIC_HUMIDITY  ! Vapor Mixing Ratio (QV, Q2)
+   case (QTY_PRESSURE); qty = QTY_SURFACE_PRESSURE
 
 end select
 
@@ -1014,6 +1027,8 @@ do i = 1, num_domains
    allocate(stat_dat(i)%zs(dim_size(1))) ! soil_layers_stag
    call nc_get_variable(ncid, 'ZS', stat_dat(i)%zs, routine)
 
+   call nc_get_variable(ncid, 'P_TOP', stat_dat(i)%p_top, routine)
+
 
    call nc_close_file(ncid, routine)
 
@@ -1069,7 +1084,6 @@ compute_geometric_height = (termr*geopot) / ( (termg/grav) * termr - geopot )
 end function compute_geometric_height
 
 !------------------------------------------------------------------
-! HK todo VERTISSCALEHEIGHT
 ! This is mass level
 subroutine get_level_below_obs(which_vert, id, lon_lat_vert, ens_size, state_handle, &
                                ll, ul, lr, ur, dx, dy, dxm, dym, &
@@ -1119,7 +1133,7 @@ select case (which_vert)
    case(VERTISSURFACE)
        zloc(:) = 1.0_r8
        fail = .false.
-       ! call check to see if the station height is too far away from the model surface height
+       ! HK todo call check to see if the station height is too far away from the model surface height
    case(VERTISUNDEF)
        zloc = 0.0_r8; fail = .false.
    case default
@@ -1233,6 +1247,42 @@ model_pressure_t(:) = ps0 * ( (gas_constant*(ts0+x_it)*qvf1) / &
      (ps0/rho(:)) )**cpovcv
 
 end function model_pressure_t
+
+!------------------------------------------------------------------
+! returns surface pressure at a point on the mass grid
+function model_pressure_s(i, j, id, state_handle, ens_size)
+
+integer,             intent(in) :: i,j,id
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: ens_size
+
+real(r8)              :: model_pressure_s(ens_size)
+
+integer(i8) :: ips, imu
+integer     :: var_id_psfc, var_id_mu
+real(r8)    :: x_imu(1), x_ips(1)
+
+var_id_psfc = get_varid_from_varname(wrf_dom(id), 'PSFC')
+var_id_mu = get_varid_from_varname(wrf_dom(id), 'MU')
+
+if ( var_id_PSFC > 0 ) then
+   ips = get_dart_vector_index(i,j,1, wrf_dom(id), QTY_SURFACE_PRESSURE)
+   x_ips = get_state(ips, state_handle)
+   model_pressure_s = x_ips
+
+elseif (var_id_mu > 0) then
+   imu = get_dart_vector_index(i,j,1, wrf_dom(id), QTY_PRESSURE)
+   x_imu = get_state(imu, state_handle)
+   model_pressure_s = stat_dat(id)%p_top + stat_dat(id)%mub(i,j) + x_imu
+
+else
+   call error_handler(E_ERR, 'model_pressure_s:', &
+    'One of MU (QTY_PRESSURE) or PSFC (QTY_SURFACE_PRESSURE) must be in state vector to compute surface pressure', &
+     source)
+endif
+
+end function model_pressure_s
+
 
 !------------------------------------------------------------------
 ! Calculate the model level "zk" on half (mass) levels,
@@ -1611,20 +1661,17 @@ temperature_interpolate = (ts0 + a1(:))*(pres(:)/ps0)**kappa
 end function temperature_interpolate
 
 !------------------------------------------------------------------
-function pressure_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+function pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
 integer,             intent(in) :: ens_size
 type(ensemble_type), intent(in) :: state_handle
-integer,             intent(in) :: qty
 integer,             intent(in) :: id
 integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
 integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
 real(r8),            intent(in) :: dxm, dx, dy, dym
 real(r8) :: pressure_interpolate(ens_size)
 
-real(r8), dimension(ens_size) :: a1, pres, pres1, pres2, pres3, pres4
-
-a1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+real(r8), dimension(ens_size) :: pres, pres1, pres2, pres3, pres4
 
 pres1 = model_pressure_t(ll(1), ll(2), k, id, state_handle, ens_size)
 pres2 = model_pressure_t(lr(1), lr(2), k, id, state_handle, ens_size)
@@ -1635,6 +1682,39 @@ pres4 = model_pressure_t(ur(1), ur(2), k, id, state_handle, ens_size)
 pressure_interpolate = dym*( dxm*pres1 + dx*pres2 ) + dy*( dxm*pres3 + dx*pres4 )
 
 end function pressure_interpolate
+
+!------------------------------------------------------------------
+function surface_pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, dxm, dx, dy, dym)
+
+integer,             intent(in) :: ens_size
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: id
+integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+real(r8),            intent(in) :: dxm, dx, dy, dym
+real(r8) :: surface_pressure_interpolate(ens_size)
+
+real(r8), dimension(ens_size) :: pres, pres1, pres2, pres3, pres4
+integer :: e
+
+pres1 = model_pressure_s(ll(1), ll(2), id, state_handle, ens_size)
+pres2 = model_pressure_s(lr(1), lr(2), id, state_handle, ens_size)
+pres3 = model_pressure_s(ul(1), ul(2), id, state_handle, ens_size)
+pres4 = model_pressure_s(ur(1), ur(2), id, state_handle, ens_size)
+
+! Pressure at location
+
+do e = 1, ens_size
+   ! HK todo original code comment:
+   ! I'm not quite sure where this comes from, but I will trust them on it....
+   if ( pres1 (e) /= 0.0_r8 .and. pres2(e) /= 0.0_r8 .and. pres3(e) /= 0.0_r8 .and. &
+        pres4(e) /= 0.0_r8 ) then
+
+    surface_pressure_interpolate(e) = dym*( dxm*pres1(e) + dx*pres2(e) ) + dy*( dxm*pres3(e) + dx*pres4(e) )
+   endif  !HK todo initialize to missing_r8?
+enddo
+
+
+end function surface_pressure_interpolate
 
 !------------------------------------------------------------------
 function specific_humidity_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
@@ -1774,9 +1854,8 @@ do i = 1, num
    
    elseif (which_vert == VERTISSCALEHEIGHT) then
    
-      ! HK todo model_surface_pressure
-      !vert = -log(model_pressure(ip, jp, kp, id, var_id, state_id, state_handle) / &
-      !         model_surface_pressure_distrib(ip, jp, id, var_type, state_handle))
+      vert = -log(model_pressure(ip, jp, kp, id, var_id, state_id, state_handle) / &
+               model_surface_pressure(ip, jp, id, var_id, state_id, state_handle))
    
    endif
 
@@ -1805,6 +1884,7 @@ integer  :: i, j ! grid
 real(r8) :: xloc, yloc ! WRF i,j in the grid
 real(r8) :: dx, dxm, dy, dym ! grid fractions
 real(r8) :: zout(1), zk(1), zk1(1), geop(1), zloc(1)
+real(r8) :: pres1(1), pres2(1), pres3(1), pres4(1)
 integer  :: ens_size, rc, k(1)
 logical  :: fail
 integer  :: ob ! loop variable
@@ -1870,17 +1950,32 @@ do ob = 1, num
       case (VERTISPRESSURE)
 
         if (vert_coord_in == VERTISSURFACE) then
-           print*, 'not done'
+           ! compute surface pressure at all neighboring mass points
+           pres1 = model_pressure_s(ll(1), ll(2), id, state_handle, ens_size)
+           pres2 = model_pressure_s(lr(1), lr(2), id, state_handle, ens_size)
+           pres3 = model_pressure_s(ul(1), ul(2), id, state_handle, ens_size)
+           pres4 = model_pressure_s(ur(1), ur(2), id, state_handle, ens_size)
+           zout = dym*( dxm*pres1(1) + dx*pres2(1) ) + dy*( dxm*pres3(1) + dx*pres4(1) )
+
         else
-           zk  = pressure_interpolate(ens_size, state_handle, QTY_PRESSURE, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
-           zk1 = pressure_interpolate(ens_size, state_handle, QTY_PRESSURE, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
+           zk  = pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+           zk1 = pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
            zout = vertical_interpolation(ens_size, k, zloc, zk, zk1)
         endif
 
       case (VERTISHEIGHT)
 
          if (vert_coord_in == VERTISSURFACE) then
-             print*, 'not done'
+            ! a surface ob is assumed to have height as vertical coordinate.
+            ! this code needs to be revised if this is not true
+            ! (in that case uncomment lines below to get terrain height
+            ! from model)
+            zout = lon_lat_vert(3)
+            !! or: directly interpolate terrain height at neighboring mass points
+            !zout = dym*( dxm*stat_dat(id)%hgt(i,  j) + &
+            !              dx*stat_dat(id)%hgt(i+1,j) ) + &
+            !        dy*( dxm*stat_dat(id)%hgt(i,  j+1) + &
+            !              dx*stat_dat(id)%hgt(i+1,j+1) )
          else
             zk  = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
             zk1 = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
@@ -1889,8 +1984,22 @@ do ob = 1, num
         endif
 
       case (VERTISSCALEHEIGHT)
-         print*, 'not done'
+         if (vert_coord_in == VERTISSURFACE) then
+            zout = -log(1.0_r8)
+         else
+            zk  = pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+            zk1 = pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
+            zout = vertical_interpolation(ens_size, k, zloc, zk, zk1)
 
+            ! surface pressure
+            pres1 = model_pressure_s(ll(1), ll(2), id, state_handle, ens_size)
+            pres2 = model_pressure_s(lr(1), lr(2), id, state_handle, ens_size)
+            pres3 = model_pressure_s(ul(1), ul(2), id, state_handle, ens_size)
+            pres4 = model_pressure_s(ur(1), ur(2), id, state_handle, ens_size)
+
+            zout = -log(zout / (dym*( dxm*pres1(1) + dx*pres2(1) ) + dy*( dxm*pres3(1) + dx*pres4(1) )))
+
+         endif
         
 
    end select
@@ -1902,6 +2011,8 @@ enddo
 end subroutine convert_vertical_obs
 
 !------------------------------------------------------------------
+! model height any grid u,v,w,t
+! used in convert_vertical_state so ens_size = 1
 function model_height(i, j, k, id, qty, var_id, state_id, state_handle)
 
 type(ensemble_type), intent(in) :: state_handle
@@ -2289,6 +2400,8 @@ endif
 end function extrap_pressure
 
 !------------------------------------------------------------------
+! model pressure any grid (w,u,v,t)
+! used in convert_vertical_state so ens_size = 1
 function model_pressure(i, j, kp, id, var_id, state_id, state_handle)
 
 type(ensemble_type), intent(in) :: state_handle
@@ -2298,10 +2411,18 @@ integer,             intent(in) :: state_id
 real(r8)                        :: model_pressure
 
 real(r8) :: p(1), p_one(1), p_two(1) ! only using the mean, so calling model_pressure_t with ens_size=1
-integer   :: k(1), off
+integer   :: k(1), off, n
 real(r8) :: intermediate
 
 k(1) = kp ! array version
+
+! HK this is for soil variables
+do n = 1, get_num_dims(state_id, var_id)
+   if ( get_dim_name(state_id, var_id, n) == 'soil_layers_stag' ) then
+      p = model_pressure_s(i, j, id, state_handle, 1)
+      model_pressure = p(1)
+   endif
+enddo
 
 if (on_t_grid(state_id, var_id)) then
    p = model_pressure_t(i, j, k, id, state_handle, 1)
@@ -2419,15 +2540,150 @@ elseif (on_v_grid(state_id, var_id)) then ! average in the horizontal v directio
 
     else
 
-      p_one = model_pressure_t(i,j,  k,id, state_handle, 1)
-      p_two = model_pressure_t(i,j-1,k,id, state_handle, 1)
-      model_pressure = interp_pressure(p_one, p_two, log_horz_interpM)
+      p_one = model_pressure_t(i,j,k, id, state_handle, 1) !HK todo use model_pressure_s if k=1?
+      model_pressure = p_one(1)
 
     endif
 
 endif
 
 end function model_pressure
+
+!------------------------------------------------------------------
+! model surface pressure any grid u,v,w,t
+function model_surface_pressure(i, j, id, var_id, state_id, state_handle)
+
+! Calculate the surface pressure at grid point (i,j), domain id.
+! The grid is defined according to var_type.
+
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: i, j, id
+integer,             intent(in) :: var_id
+integer,             intent(in) :: state_id
+real(r8)              :: model_surface_pressure
+
+integer  :: off
+integer  :: ens_size ! only using the mean, so calling model_pressure_s with ens_size=1
+real(r8) :: pres1(1), pres2(1)
+
+ens_size = 1
+
+model_surface_pressure = missing_r8
+
+! If U-grid, then pressure is defined between U points, so average --
+!   averaging depends on longitude periodicity
+if( on_u_grid(state_id, var_id) ) then
+
+   if (i==grid(id)%wes) then
+
+      ! Check to see if periodic in longitude
+      if ( grid(id)%periodic_x ) then
+
+         ! We are at seam in longitude, take first and last M-grid points
+         pres1 = model_pressure_s(i-1,j,id, state_handle, ens_size)
+         pres2 = model_pressure_s(1,  j,id, state_handle, ens_size)
+         model_surface_pressure = interp_pressure(pres1, pres2, log_horz_interpM)
+         
+      else
+
+         ! If not periodic, then try extrapolating
+         pres1 = model_pressure_s(i-1,j,id, state_handle, ens_size)
+         pres2 = model_pressure_s(i-2,j,id, state_handle, ens_size)
+         model_surface_pressure = extrap_pressure(pres1, pres2, log_horz_interpM)
+
+      endif
+
+   elseif( i == 1 ) then
+
+      ! Check to see if periodic in longitude
+      if ( grid(id)%periodic_x ) then
+
+         ! We are at seam in longitude, take first and last M-grid points
+         pres1 = model_pressure_s(i,          j,id, state_handle, ens_size)
+         pres2 = model_pressure_s(grid(id)%we,j,id, state_handle, ens_size)
+         model_surface_pressure = interp_pressure(pres1, pres2, log_horz_interpM)
+         
+      else
+
+         ! If not periodic, then try extrapolating
+         pres1 = model_pressure_s(i,  j,id, state_handle, ens_size)
+         pres2 = model_pressure_s(i+1,j,id, state_handle, ens_size)
+         model_surface_pressure = extrap_pressure(pres1, pres2, log_horz_interpM)
+
+      endif
+
+   else
+
+      pres1 = model_pressure_s(i,  j,id, state_handle, ens_size)
+      pres2 = model_pressure_s(i-1,j,id, state_handle, ens_size)
+      model_surface_pressure = interp_pressure(pres1, pres2, log_horz_interpM)
+
+   endif
+
+! If V-grid, then pressure is defined between V points, so average --
+!   averaging depends on polar periodicity
+elseif( on_v_grid(state_id, var_id) ) then
+
+   if (j==grid(id)%sns) then
+
+      ! Check to see if periodic in latitude (polar)
+      if ( grid(id)%polar ) then
+
+         ! The upper corner is 180 degrees of longitude away
+         off = i + grid(id)%we/2
+         if ( off > grid(id)%we ) off = off - grid(id)%we
+
+         pres1 = model_pressure_s(off,j-1,id, state_handle, ens_size)
+         pres2 = model_pressure_s(i  ,j-1,id, state_handle, ens_size)
+         model_surface_pressure = interp_pressure(pres1, pres2, log_horz_interpM)
+
+      ! If not periodic, then try extrapolating
+      else
+
+         pres1 = model_pressure_s(i,j-1,id, state_handle, ens_size)
+         pres2 = model_pressure_s(i,j-2,id, state_handle, ens_size)
+         model_surface_pressure = extrap_pressure(pres1, pres2, log_horz_interpM)
+
+      endif
+
+   elseif( j == 1 ) then
+
+      ! Check to see if periodic in latitude (polar)
+      if ( grid(id)%polar ) then
+
+         ! The lower corner is 180 degrees of longitude away
+         off = i + grid(id)%we/2
+         if ( off > grid(id)%we ) off = off - grid(id)%we
+
+         pres1 = model_pressure_s(off,j,id, state_handle, ens_size)
+         pres2 = model_pressure_s(i,  j,id, state_handle, ens_size)
+         model_surface_pressure = interp_pressure(pres1, pres2, log_horz_interpM)
+
+      ! If not periodic, then try extrapolating
+      else
+
+         pres1 = model_pressure_s(i,j,  id, state_handle, ens_size)
+         pres2 = model_pressure_s(i,j+1,id, state_handle, ens_size)
+         model_surface_pressure = extrap_pressure(pres1, pres2, log_horz_interpM)
+
+      endif
+
+   else
+
+      pres1 = model_pressure_s(i,j,  id, state_handle, ens_size)
+      pres2 = model_pressure_s(i,j-1,id, state_handle, ens_size)
+      model_surface_pressure = interp_pressure(pres1, pres2, log_horz_interpM)
+
+   endif
+
+else
+
+   pres1 = model_pressure_s(i,j,id, state_handle, ens_size)
+   model_surface_pressure = pres1(1)
+
+endif
+
+end function model_surface_pressure
 
 !------------------------------------------------------------------
 function convert_indices_to_lon_lat_lev(i, j, k, var_id, state_id)
