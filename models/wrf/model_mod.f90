@@ -391,7 +391,7 @@ qty = update_qty_if_location_is_surface(qty_in, location)
 select case (qty)
    case (QTY_U_WIND_COMPONENT, QTY_V_WIND_COMPONENT )
       fld_k1 = wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, i, j, lon_lat_vert(1))
-      fld_k2 = wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, i, j, lon_lat_vert(1))
+      fld_k2 = wind_interpolate(ens_size, state_handle, qty, id, k+1, xloc, yloc, i, j, lon_lat_vert(1))
    case (QTY_TEMPERATURE)
       fld_k1 = temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
       fld_k2 = temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
@@ -1109,37 +1109,38 @@ real(r8) :: v_p(grid(id)%bt,ens_size)
 real(r8) :: v_h(grid(id)%bt,ens_size)
 logical :: lev0
 
+fail = .false.
+
 select case (which_vert)
    case(VERTISLEVEL)
       zloc(:) = lon_lat_vert(3); fail = .false.
    case(VERTISPRESSURE)
       call get_model_pressure_profile(id, ll, ul, lr, ur, dx, dy, dxm, dym, ens_size, state_handle, v_p)
       do e = 1, ens_size
-         call pres_to_zk(lon_lat_vert(3), v_p(:,e), grid(id)%bt, zloc(e), lev0)
+         call pres_to_zk(lon_lat_vert(3), v_p(:,e), grid(id)%bt, zloc(e), level_below(e), lev0, fail)
+         if (fail) return
          if (lev0) then
             print*, "pressure obs below lowest sigma"
             fail = .true.
             return
          endif
       enddo
-      fail = .false.
    case(VERTISHEIGHT)
       call get_model_height_profile(ll, ul, lr, ur, dx, dy, dxm, dym, id, v_h, state_handle, ens_size)
       do e = 1, ens_size
-         call height_to_zk(lon_lat_vert(3), v_h(:, e), grid(id)%bt, zloc(e), level_below(e), lev0)
+         call height_to_zk(lon_lat_vert(3), v_h(:, e), grid(id)%bt, zloc(e), level_below(e), lev0, fail)
+         if (fail) return
          if (lev0) then
             print*, "height obs below lowest sigma"
                fail = .true.
             return
          endif
       enddo
-      fail = .false.
    case(VERTISSURFACE)
        zloc(:) = 1.0_r8
-       fail = .false.
        ! HK todo call check to see if the station height is too far away from the model surface height
    case(VERTISUNDEF)
-       zloc = 0.0_r8; fail = .false.
+       zloc = 0.0_r8
    case default
        fail = .true.
 end select
@@ -1291,29 +1292,37 @@ end function model_pressure_s
 !------------------------------------------------------------------
 ! Calculate the model level "zk" on half (mass) levels,
 ! corresponding to pressure "pres"
-subroutine pres_to_zk(pres, mdl_v, n3, zk, lev0)
+subroutine pres_to_zk(pres, mdl_v, n3, zk, level_below, lev0, fail)
 
 real(r8), intent(in)  :: pres
 real(r8), intent(in)  :: mdl_v(0:n3)
 integer,  intent(in)  :: n3
 real(r8), intent(out) :: zk
+integer,  intent(out) :: level_below
 logical,  intent(out) :: lev0
+logical,  intent(out) :: fail
 
 integer  :: k
 
 lev0 = .false.
+zk = MISSING_R8
+fail = .false.
 
 ! if out of range completely, return missing_r8 and lev0 false
-if (pres > mdl_v(0) .or. pres < mdl_v(n3)) return
+if (pres > mdl_v(0) .or. pres < mdl_v(n3)) then
+   fail = .true.
+   return
+endif
 
 ! if above surface but below lowest sigma level, return the
 ! sigma value but set lev0 true
 if(pres <= mdl_v(0) .and. pres > mdl_v(1)) then
   lev0 = .true.
+  level_below = 1
   if (log_vert_interp) then
      zk = (log(mdl_v(0)) - log(pres))/(log(mdl_v(0)) - log(mdl_v(1)))
   else
-  zk = (mdl_v(0) - pres)/(mdl_v(0) - mdl_v(1))
+     zk = (mdl_v(0) - pres)/(mdl_v(0) - mdl_v(1))
   endif
   return
  endif
@@ -1322,10 +1331,11 @@ if(pres <= mdl_v(0) .and. pres > mdl_v(1)) then
 ! as a real number, including the fraction between the levels.
 do k = 1,n3-1
    if(pres <= mdl_v(k) .and. pres >= mdl_v(k+1)) then
+      level_below = k
       if (log_vert_interp) then
          zk = real(k) + (log(mdl_v(k)) - log(pres))/(log(mdl_v(k)) - log(mdl_v(k+1)))
       else
-      zk = real(k) + (mdl_v(k) - pres)/(mdl_v(k) - mdl_v(k+1))
+         zk = real(k) + (mdl_v(k) - pres)/(mdl_v(k) - mdl_v(k+1))
       endif
       exit
    endif
@@ -1398,23 +1408,27 @@ end subroutine get_model_height_profile
 !------------------------------------------------------------------
 ! Calculate the model level zk on half (mass) levels,
 ! corresponding to height obs_v.
-subroutine height_to_zk(obs_v, mdl_v, n3, zk, level_below, lev0)
+subroutine height_to_zk(obs_v, mdl_v, n3, zk, level_below, lev0, fail)
 
 real(r8), intent(in)  :: obs_v
 integer,  intent(in)  :: n3
 real(r8), intent(in)  :: mdl_v(0:n3)
 real(r8), intent(out) :: zk
-integer,  intent(out)  :: level_below
+integer,  intent(out) :: level_below
 logical,  intent(out) :: lev0
+logical,  intent(out) :: fail
 
 integer   :: k
 
-zk = missing_r8
+zk = MISSING_R8
 lev0 = .false.
+fail = .false.
 
-! HK todo: explicit fail vs. missing r8
 ! if out of range completely, return missing_r8 and lev0 false
-if (obs_v < mdl_v(0) .or. obs_v > mdl_v(n3)) return
+if (obs_v < mdl_v(0) .or. obs_v > mdl_v(n3)) then
+   fail = .true.
+   return
+endif
 
 ! if above surface but below lowest 3-d height level, return the
 ! height value but set lev0 true
