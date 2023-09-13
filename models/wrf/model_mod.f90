@@ -390,11 +390,11 @@ qty = update_qty_if_location_is_surface(qty_in, location)
 
 select case (qty)
    case (QTY_U_WIND_COMPONENT, QTY_V_WIND_COMPONENT )
-      fld_k1 = wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, i, j, lon_lat_vert(1))
-      fld_k2 = wind_interpolate(ens_size, state_handle, qty, id, k+1, xloc, yloc, i, j, lon_lat_vert(1))
+      fld_k1 = wind_interpolate(ens_size, state_handle, qty, id, k,   xloc, yloc, i, j, dxm, dx, dy, dym, lon_lat_vert(1))
+      fld_k2 = wind_interpolate(ens_size, state_handle, qty, id, k+1, xloc, yloc, i, j, dxm, dx, dy, dym, lon_lat_vert(1))
    case (QTY_TEMPERATURE)
-      fld_k1 = temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
-      fld_k2 = temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
+      fld_k1 = temperature_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+      fld_k2 = temperature_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
    case (QTY_POTENTIAL_TEMPERATURE)
       fld_k1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym) + ts0
       fld_k2 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym) + ts0
@@ -1649,11 +1649,10 @@ geopotential_height_interpolate = ( a1 + &
 end function geopotential_height_interpolate
 
 !------------------------------------------------------------------
-function temperature_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+function temperature_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
 integer,             intent(in) :: ens_size
 type(ensemble_type), intent(in) :: state_handle
-integer,             intent(in) :: qty
 integer,             intent(in) :: id
 integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
 integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
@@ -1663,7 +1662,7 @@ real(r8) :: temperature_interpolate(ens_size)
 real(r8), dimension(ens_size) :: a1, pres, pres1, pres2, pres3, pres4
 
 ! In terms of perturbation potential temperature
-a1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+a1 = simple_interpolation(ens_size, state_handle, QTY_POTENTIAL_TEMPERATURE, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
 pres1 = model_pressure_t(ll(1), ll(2), k, id, state_handle, ens_size)
 pres2 = model_pressure_t(lr(1), lr(2), k, id, state_handle, ens_size)
@@ -1755,7 +1754,7 @@ specific_humidity_interpolate = a1(:) /(1.0_r8 + a1(:))
 end function specific_humidity_interpolate
 
 !------------------------------------------------------------------
-function wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, i, j, lon)
+function wind_interpolate(ens_size, state_handle, qty, id, k, xloc, yloc, i, j, dxm, dx, dy, dym, lon)
 
 integer,             intent(in) :: ens_size
 type(ensemble_type), intent(in) :: state_handle
@@ -1764,12 +1763,13 @@ integer,             intent(in) :: id
 integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
 real(r8),            intent(in) :: xloc, yloc ! location on mass grid
 integer,             intent(in) :: i,j ! ll corners of mass grid
+real(r8),            intent(in) :: dxm, dx, dy, dym
 real(r8),            intent(in) :: lon ! Longitude of point in degrees
 real(r8) :: wind_interpolate(ens_size)
 
 real(r8), dimension(ens_size) :: u_wind_grid, v_wind_grid, u_wind, v_wind
 real(r8) :: xloc_u, yloc_v  ! x ugrid, y vgrid
-real(r8) :: dx, dxm, dy, dym
+real(r8) :: dx_u, dxm_u, dy_v, dym_v
 integer :: i_u, j_v
 integer :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
 integer :: e, rc
@@ -1787,13 +1787,13 @@ yloc_v = yloc + 0.5_r8
 ! HK TODO what about periodic_y?
 if ( grid(id)%periodic_x .and. xloc_u > real(grid(id)%wes,r8) ) xloc_u = xloc_u - real(grid(id)%we,r8)
 
-call toGrid(xloc_u,i_u,dx,dxm)
-call toGrid(yloc_v,j_v,dy,dym)
+call toGrid(xloc_u,i_u,dx_u,dxm_u)
+call toGrid(yloc_v,j_v,dy_v,dym_v)
 
-call getCorners(i, j_v, id, qty, ll, ul, lr, ur, rc)
-u_wind_grid = simple_interpolation(ens_size, state_handle, QTY_U_WIND_COMPONENT, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
-call getCorners(i_u, j, id, qty, ll, ul, lr, ur, rc)
-v_wind_grid = simple_interpolation(ens_size, state_handle, QTY_V_WIND_COMPONENT, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+call getCorners(i_u, j, id, QTY_U_WIND_COMPONENT, ll, ul, lr, ur, rc)
+u_wind_grid = simple_interpolation(ens_size, state_handle, QTY_U_WIND_COMPONENT, id, ll, ul, lr, ur, k, dxm_u, dx_u, dy, dym)
+call getCorners(i, j_v, id, QTY_V_WIND_COMPONENT, ll, ul, lr, ur, rc)
+v_wind_grid = simple_interpolation(ens_size, state_handle, QTY_V_WIND_COMPONENT, id, ll, ul, lr, ur, k, dxm, dx, dy_v, dym_v)
 
 do e = 1, ens_size
    call gridwind_to_truewind(lon, grid(id)%proj, u_wind_grid(e), v_wind_grid(e), u_wind(e), v_wind(e))
@@ -2832,6 +2832,9 @@ select case (qty)
 
    case (QTY_SURFACE_ELEVATION)
       able_to_interpolate_qty = .true.  ! terrain height HGT is static data
+
+   case (QTY_TEMPERATURE)
+      able_to_interpolate_qty = qty_in_domain(id, QTY_POTENTIAL_TEMPERATURE)
 
    case default
      able_to_interpolate_qty = qty_in_domain(id, qty)
