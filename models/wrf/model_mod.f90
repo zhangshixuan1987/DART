@@ -1234,7 +1234,7 @@ integer :: var_idv, var_idt, e
 ! Simplification: alb*mub = (phb(i,j,k+1) - phb(i,j,k))/dnw(k)
 
 var_idv = get_varid_from_kind(wrf_dom(id), QTY_VAPOR_MIXING_RATIO)
-var_idt = get_varid_from_kind(wrf_dom(id), QTY_TEMPERATURE)
+var_idt = get_varid_from_kind(wrf_dom(id), QTY_POTENTIAL_TEMPERATURE) ! HK original code type_t is this always QTY_POTENTIAL_TEMPERATURE
 do e = 1, ens_size
   iqv = get_dart_vector_index(i,j,k(e), wrf_dom(id), var_idv)
   it  = get_dart_vector_index(i,j,k(e), wrf_dom(id), var_idt)
@@ -2862,8 +2862,6 @@ else
 endif
 
 do id = n, 1, -1
-
-print*, 'obslon, obslat', obslon, obslat, min(max(obslat,-89.9999999_r8),89.9999999_r8)
 
 ! From module_map_utils.f90
 !       latlon_to_ij(proj, lat, lon, i, j)
