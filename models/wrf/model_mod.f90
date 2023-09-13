@@ -1916,28 +1916,28 @@ ens_size = 1 ! working with the mean state
 
 do ob = 1, num
 
-   lon_lat_vert = get_location(locs(i))
-   vert_coord_in = nint(query_location(locs(i)))
+   lon_lat_vert = get_location(locs(ob))
+   vert_coord_in = nint(query_location(locs(ob)))
    
    if (vert_coord_in == which_vert) then ! conversion is already done
-      istatus(i) = 0
+      istatus(ob) = 0
       cycle
    endif
    
    if (lon_lat_vert(3) == VERTISUNDEF) then ! no vertical, no conversion
-      istatus(i) = 0
+      istatus(ob) = 0
       cycle
    endif
    
    if (lon_lat_vert(3) == MISSING_R8) then ! vertical is missing, no conversion
-      istatus(i) = 0  ! HK todo original code does not set success for this
+      istatus(ob) = 0  ! HK todo original code does not set success for this
       cycle
    endif
    
    ! convert to which_vert
    call get_domain_info(lon_lat_vert(1),lon_lat_vert(2),id,xloc,yloc)
    if (id == 0) then
-      istatus(i) = NOT_IN_ANY_DOMAIN
+      istatus(ob) = NOT_IN_ANY_DOMAIN
       cycle
    endif
    
@@ -1946,7 +1946,7 @@ do ob = 1, num
    call toGrid(yloc,j,dy,dym)
    
    if ( bounds_check_fail() ) then
-      istatus(i) = FAILED_BOUNDS_CHECK
+      istatus(ob) = FAILED_BOUNDS_CHECK
       cycle
    endif
    
@@ -1955,7 +1955,7 @@ do ob = 1, num
    ! vertical location mass level
    call get_level_below_obs(which_vert, id, lon_lat_vert, ens_size, state_handle, ll, ul, lr, ur, dx, dy, dxm, dym, k, zloc, fail)
    if (fail) then
-      istatus(i) = VERTICAL_LOCATION_FAIL
+      istatus(ob) = VERTICAL_LOCATION_FAIL
       ! set vertical?
       cycle
    endif
@@ -2022,7 +2022,7 @@ do ob = 1, num
 
    end select
 
-   locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), zout(1), which_vert)
+   locs(ob) = set_location(lon_lat_vert(1), lon_lat_vert(2), zout(1), which_vert)
 
 enddo
 
