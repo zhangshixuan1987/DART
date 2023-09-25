@@ -1953,7 +1953,7 @@ do ob = 1, num
    call getCorners(i, j, id, QTY_POTENTIAL_TEMPERATURE, ll, ul, lr, ur, rc) !HK todo what qty to pick?
    
    ! vertical location mass level
-   call get_level_below_obs(which_vert, id, lon_lat_vert, ens_size, state_handle, ll, ul, lr, ur, dx, dy, dxm, dym, k, zloc, fail)
+   call get_level_below_obs(vert_coord_in, id, lon_lat_vert, ens_size, state_handle, ll, ul, lr, ur, dx, dy, dxm, dym, k, zloc, fail)
    if (fail) then
       istatus(ob) = VERTICAL_LOCATION_FAIL
       ! set vertical?
@@ -2445,6 +2445,8 @@ do n = 1, get_num_dims(state_id, var_id)
    endif
 enddo
 
+!HK todo surface qtys
+
 if (on_t_grid(state_id, var_id)) then
    p = model_pressure_t(i, j, k, id, state_handle, 1)
    model_pressure = p(1)
@@ -2561,8 +2563,9 @@ elseif (on_v_grid(state_id, var_id)) then ! average in the horizontal v directio
 
     else
 
-      p_one = model_pressure_t(i,j,k, id, state_handle, 1) !HK todo use model_pressure_s if k=1?
-      model_pressure = p_one(1)
+      p_one = model_pressure_t(i, j,k, id, state_handle, 1) 
+      p_two = model_pressure_t(i, j+1, k, id, state_handle, 1)
+      model_pressure = interp_pressure(p_one, p_two, log_horz_interpM)
 
     endif
 
