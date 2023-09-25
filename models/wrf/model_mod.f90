@@ -1863,12 +1863,10 @@ do i = 1, num
    elseif (which_vert == VERTISPRESSURE) then
    
       vert = model_pressure(ip, jp, kp, id, var_id, state_id, state_handle)
-      locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
    
    elseif (which_vert == VERTISHEIGHT) then
    
       vert = model_height(ip, jp, kp, id, loc_qtys(i), var_id, state_id, state_handle)
-      locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
    
    elseif (which_vert == VERTISSCALEHEIGHT) then
    
