@@ -2023,6 +2023,7 @@ do ob = 1, num
    end select
 
    locs(ob) = set_location(lon_lat_vert(1), lon_lat_vert(2), zout(1), which_vert)
+   istatus(ob) = 0
 
 enddo
 
