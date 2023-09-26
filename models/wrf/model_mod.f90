@@ -439,7 +439,7 @@ if (surface_qty(qty)) then
 else
    fld1  = force_non_negative_if_required(ens_size, qty, fld_k1)
    fld2  = force_non_negative_if_required(ens_size, qty, fld_k2)
-   expected_obs(:) = vertical_interpolation(ens_size, k, zloc, fld1, fld2)
+   expected_obs(:) = vertical_interpolation(ens_size, zloc, fld1, fld2)
 endif
 
 istatus(:) = 0
@@ -518,6 +518,7 @@ if (istatus(1) /= 0) then
    num_close = 0
    return
 endif
+base_loc = loc_ar(1)
 
 call loc_get_close(gc, base_loc, base_type, locs, loc_qtys, &
                           num_close, close_ind)
@@ -537,6 +538,7 @@ do i = 1, num_close
       dist(i) = 1.0e9
    endif
 enddo
+
 
 end subroutine get_close_obs
 
@@ -565,6 +567,7 @@ if (istatus(1) /= 0) then
    num_close = 0
    return
 endif
+base_loc = loc_ar(1)
 
 call loc_get_close(gc, base_loc, base_type, locs, loc_qtys, num_close, close_ind)
 
@@ -794,10 +797,9 @@ simple_interpolation = dym*( dxm*x_ill(:) + dx*x_ilr(:) ) + dy*( dxm*x_iul(:) + 
 end function simple_interpolation
 
 !------------------------------------------------------------------
-function vertical_interpolation(ens_size, k, zloc, fld1, fld2)
+function vertical_interpolation(ens_size, zloc, fld1, fld2)
 
 integer,  intent(in) :: ens_size
-integer,  intent(in) :: k(ens_size)
 real(r8), intent(in) :: zloc(ens_size)
 real(r8), intent(in) :: fld1(ens_size), fld2(ens_size)
 
@@ -1904,6 +1906,7 @@ real(r8) :: pres1(1), pres2(1), pres3(1), pres4(1)
 integer  :: ens_size, rc, k(1)
 logical  :: fail
 integer  :: ob ! loop variable
+real(r8) :: dz, dzm ! dummys for toGrid call
 
 integer, parameter :: FAILED_BOUNDS_CHECK = 144
 integer, parameter :: CANNOT_INTERPOLATE_QTY = 155
@@ -1976,7 +1979,7 @@ do ob = 1, num
         else
            zk  = pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
            zk1 = pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
-           zout = vertical_interpolation(ens_size, k, zloc, zk, zk1)
+           zout = vertical_interpolation(ens_size, zloc, zk, zk1)
         endif
 
       case (VERTISHEIGHT)
@@ -1993,9 +1996,11 @@ do ob = 1, num
             !        dy*( dxm*stat_dat(id)%hgt(i,  j+1) + &
             !              dx*stat_dat(id)%hgt(i+1,j+1) )
          else
+            ! adding 0.5 to get to the staggered vertical grid for height
+            call toGrid(zloc(1)+0.5,k(1),dz,dzm)
             zk  = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
             zk1 = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
-            geop = vertical_interpolation(ens_size, k, zloc, zk, zk1)
+            geop = vertical_interpolation(ens_size, zloc+0.5, zk, zk1)
             zout = compute_geometric_height(geop(1), grid(id)%latitude(i, j))
         endif
 
@@ -2005,7 +2010,7 @@ do ob = 1, num
          else
             zk  = pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
             zk1 = pressure_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
-            zout = vertical_interpolation(ens_size, k, zloc, zk, zk1)
+            zout = vertical_interpolation(ens_size, zloc, zk, zk1)
 
             ! surface pressure
             pres1 = model_pressure_s(ll(1), ll(2), id, state_handle, ens_size)
