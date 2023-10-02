@@ -211,7 +211,7 @@ type grid_ll
   integer :: we, sn ! west-east, south-north number of grid points
   integer :: wes, sns ! west-east staggered, south-north staggered number of grid points
   integer :: bt ! bottom-top number of grid points
-  integer :: bt_stag ! staggered bottom-top number of grid points
+  integer :: bts ! staggered bottom-top number of grid points
   real(r8) :: dt ! time step
 
   ! wrf options, apply to domain 1 only.
@@ -368,16 +368,20 @@ if (.not. able_to_interpolate_qty(id, qty_in) ) then
    return
 endif
 
+qty = update_qty_if_location_is_surface(qty_in, location)
+
+! need to force QTY_POTENTIAL_TEMPERATURE
+
 ! horizontal location mass point
 call toGrid(xloc,i,dx,dxm)
 call toGrid(yloc,j,dy,dym)
 
-if ( bounds_check_fail() ) then
+if ( within_in_bounds_horizontal(i, j, id, qty) ) then
    istatus(:) = FAILED_BOUNDS_CHECK
    return
 endif
 
-call getCorners(i, j, id, qty_in, ll, ul, lr, ur, rc)
+call getCorners(i, j, id, qty, ll, ul, lr, ur, rc)
 
 ! vertical location
 call get_level_below_obs(which_vert, id, lon_lat_vert, ens_size, state_handle, ll, ul, lr, ur, dx, dy, dxm, dym, k, zloc, fail)
@@ -386,7 +390,6 @@ if (fail) then
    return
 endif
 
-qty = update_qty_if_location_is_surface(qty_in, location)
 
 select case (qty)
    case (QTY_U_WIND_COMPONENT, QTY_V_WIND_COMPONENT )
@@ -975,7 +978,7 @@ do i = 1, num_domains
     call nc_get_global_attribute(ncid, 'DT', grid(i)%dt)
 
     grid(i)%bt = nc_get_dimension_size(ncid, 'bottom_top', routine)
-    grid(i)%bt_stag = nc_get_dimension_size(ncid, 'bottom_top_stag', routine)
+    grid(i)%bts = nc_get_dimension_size(ncid, 'bottom_top_stag', routine)
 
     call nc_close_file(ncid, routine)
 
@@ -1358,7 +1361,7 @@ real(r8), intent(out) :: v_h(0:grid(id)%bt, ens_size)
 type(ensemble_type), intent(in)  :: state_handle
 integer e !< for ensemble loop
 
-real(r8)              :: fll(grid(id)%bt_stag, ens_size), geop(ens_size), lat(ens_size)
+real(r8)              :: fll(grid(id)%bts, ens_size), geop(ens_size), lat(ens_size)
 integer(i8)           :: ill, iul, ilr, iur
 integer               :: k, rc
 
@@ -1367,7 +1370,7 @@ integer :: var_id
 
 var_id = get_varid_from_kind(wrf_dom(id), QTY_GEOPOTENTIAL_HEIGHT)
 
-do k = 1, grid(id)%bt_stag  ! geopotential height (PH) is on bottom_top_stag
+do k = 1, grid(id)%bts  ! geopotential height (PH) is on bottom_top_stag
 
    ill = get_dart_vector_index(ll(1), ll(2), k, wrf_dom(id), var_id)
    iul = get_dart_vector_index(ul(1), ul(2), k, wrf_dom(id), var_id)
@@ -1946,7 +1949,7 @@ do ob = 1, num
    call toGrid(xloc,i,dx,dxm)
    call toGrid(yloc,j,dy,dym)
    
-   if ( bounds_check_fail() ) then
+   if ( within_in_bounds_horizontal(i, j, id, loc_qtys(ob)) ) then
       istatus(ob) = FAILED_BOUNDS_CHECK
       cycle
    endif
@@ -2463,7 +2466,7 @@ elseif (on_w_grid(state_id, var_id)) then ! average in the vertical
       p_two = model_pressure_t(i, j, k+1, id, state_handle, 1)
       model_pressure = extrap_pressure(p_one, p_two, log_vert_interp)
 
-   elseif ( kp==grid(id)%bt_stag ) then ! on boundary, extrapolate in the vertical
+   elseif ( kp==grid(id)%bts ) then ! on boundary, extrapolate in the vertical
 
       p_one = model_pressure_t(i, j, k-1, id, state_handle, 1)
       p_two = model_pressure_t(i, j, k-2, id, state_handle, 1)
@@ -2802,13 +2805,20 @@ end function on_t_grid
 !------------------------------------------------------------------
 !------------------------------------------------------------------
 
-function bounds_check_fail()
+function within_in_bounds_horizontal(i, j, id, qty)
 
-logical :: bounds_check_fail
+integer, intent(in) :: i, j
+integer, intent(in) :: id
+integer, intent(in) :: qty
+logical :: within_in_bounds_horizontal
 
-bounds_check_fail = .false.
+integer :: var_id
 
-end function bounds_check_fail
+var_id = get_varid_from_kind(wrf_dom(id), qty) 
+
+within_in_bounds_horizontal = (bounds_check_lon(i, id, var_id) .and. bounds_check_lat(j, id, var_id))
+
+end function within_in_bounds_horizontal
 
 !------------------------------------------------------------------
 function able_to_interpolate_qty(id, qty)
@@ -2840,8 +2850,9 @@ select case (qty)
    case (QTY_SURFACE_ELEVATION)
       able_to_interpolate_qty = .true.  ! terrain height HGT is static data
 
-   case (QTY_TEMPERATURE)
-      able_to_interpolate_qty = qty_in_domain(id, QTY_POTENTIAL_TEMPERATURE)
+   case (QTY_TEMPERATURE, QTY_POTENTIAL_TEMPERATURE)
+      able_to_interpolate_qty = qty_in_domain(id, QTY_TEMPERATURE) .or. &
+                                qty_in_domain(id, QTY_POTENTIAL_TEMPERATURE)
 
    case default
      able_to_interpolate_qty = qty_in_domain(id, qty)
@@ -3308,6 +3319,294 @@ call map_set( proj_code=grid(id)%map_proj, &
 
 end subroutine setup_map_projection
 
+
+!------------------------------------------------------------------
+!------------------------------------------------------------------
+! Bounds checking routines:
+  ! Summary of Allowable REAL-VALUED Index Values ==> INTEGER Index Values 
+  !
+  ! In longitude (x) direction
+  !   Periodic     & M_grid ==> [1 we+1)       ==> [1 wes)
+  !   Periodic     & U_grid ==> [1 wes)        ==> [1 wes)
+  !   NOT Periodic & M_grid ==> [1 we]         ==> [1 we)
+  !   NOT Periodic & U_grid ==> [1.5 we+0.5]   ==> [1 wes)
+  ! In latitude (y) direction
+  !   Periodic     & M_grid ==> [0.5 sn+0.5]   ==> [0 sns) *though in practice, [1 sn)*
+  !   Periodic     & V_grid ==> [1 sns]        ==> [1 sns) *though allowable range, [1.5 sn+.5]*
+  !   NOT Periodic & M_grid ==> [1 sn]         ==> [1 sn)
+  !   NOT Periodic & V_grid ==> [1.5 sn+0.5]   ==> [1 sns)
+  ! In vertical (z) direction
+  !                  M_grid ==> [1 bt]         ==> [1 bt)
+  !                  W_grid ==> [1.5 bt+0.5]   ==> [1 bts)
+
+!------------------------------------------------------------------
+
+!------------------------------------------------------------------
+! Determines whether real-valued location indices are
+! within a sensible range based on the assumed (un)staggered grid and based on 
+! whether the domain is assumed to be periodic in a given direction.
+function bounds_check_lon(ind, id, var_id)  ! or variable?
+
+integer,  intent(in)  :: ind ! index into the grid
+integer,  intent(in)  :: id  ! domain id
+integer,  intent(in)  :: var_id 
+
+logical :: bounds_check_lon
+
+! Consider cases in REAL-VALUED indexing:
+!
+! I. Longitude -- x-direction
+!    A. PERIODIC (period_x = .true.)
+!
+!       Consider Mass-grid (& V-grid) longitude grid with 4 west-east gridpoints
+!         Values  ::  [ -135 -45  45 135 ] .. {225}
+!         Indices ::  [   1   2   3   4  ] .. {1,5}
+!       Complementary U-grid
+!         Values  ::  [ -180 -90  0  90  180 ]
+!         Indices ::  [   1   2   3   4   5  ]
+!
+!       What are the allowable values for a real-valued index on each of these grids?
+!       1. M-grid  --->  [1 5)       ---> [1 we+1)
+!                  --->  [-135 225)  
+!       2. U-grid  --->  [1 5)       ---> [1 wes)
+!                  --->  [-180 180)
+!       [Note that above "allowable values" reflect that one should be able to have
+!        an observation anywhere on a given longitude circle -- the information 
+!        exists in order to successfully interpolate to anywhere over [0 360).]
+!
+!       It is up to the routine calling "boundsCheck" to have handled the 0.5 offset
+!         in indices between the M-grid & U-grid.  Hence, two examples: 
+!          a. If there is an observation location at -165 longitude, then:
+!             * An observation of TYPE_T (on the M-grid) would have ind = 4.667
+!             * An observation of TYPE_U (on the U-grid) would have ind = 1.167
+!          b. If there is an observation location at 0 longitude, then:
+!             * An observation of TYPE_T (on the M-grid) would have ind = 2.5
+!             * An observation of TYPE_U (on the U-grid) would have ind = 3.0
+!
+!    B. NOT periodic (period_x = .false.)
+!
+!       Consider Mass-grid (& V-grid) longitude grid with 4 west-east gridpoints
+!         Values  ::  [  95  105 115 125 ] 
+!         Indices ::  [   1   2   3   4  ] 
+!       Complementary U-grid
+!         Values  ::  [  90  100 110 120 130 ]
+!         Indices ::  [   1   2   3   4   5  ]
+!
+!       What are the allowable values for a real-valued index on each of these grids?
+!       1. M-grid  --->  [1 4]       ---> [1 we]
+!                  --->  [95 125]  
+!       2. U-grid  --->  [1.5 4.5]       ---> [1.5 we+0.5]
+!                  --->  [95 125]
+!       [Note that above "allowable values" reflect that one should only be able to
+!        have an observation within the M-grid, since that is the only way to  
+!        guarantee that the necessary information exists in order to successfully 
+!        interpolate to a specified location.]
+!
+!       It is up to the routine calling "boundsCheck" to have handled the 0.5 offset
+!         in indices between the M-grid & U-grid.  Hence, two examples: 
+!          a. If there is an observation location at 96 longitude, then:
+!             * An observation of TYPE_T (on the M-grid) would have ind = 1.1
+!             * An observation of TYPE_U (on the U-grid) would have ind = 1.6
+!          b. If there is an observation location at 124 longitude, then:
+!             * An observation of TYPE_T (on the M-grid) would have ind = 3.9
+!             * An observation of TYPE_U (on the U-grid) would have ind = 4.4
+!
+
+bounds_check_lon = .false.
+
+! Next check periodicity
+if ( grid(id)%periodic_x ) then
+   
+   ! If periodic in longitude, then no need to check staggering because both
+   !   M and U grids allow integer indices from [1 wes)
+   if ( ind >= 1 .and. ind < grid(id)%wes ) bounds_check_lon = .true.
+
+else
+
+   ! If NOT periodic in longitude, then we need to check staggering because
+   !   M and U grids allow different index ranges
+
+   ! Check staggering by comparing var_size(dim,type) to the staggered dimension 
+   if ( on_u_grid(wrf_dom(id),var_id) ) then
+      ! U-grid allows integer range of [1 wes)
+      if ( ind >= 1 .and. ind < grid(id)%wes ) bounds_check_lon = .true.
+   else  
+      ! M & V-grid allow [1 we)
+      if ( ind >= 1 .and. ind < grid(id)%we ) bounds_check_lon = .true.
+   endif
+
+endif
+
+end function bounds_check_lon
+
+!------------------------------------------------------------------
+function bounds_check_lat(ind, id, var_id)
+
+integer,  intent(in)  :: ind ! index into the grid
+integer,  intent(in)  :: id  ! domain id
+integer,  intent(in)  :: var_id  
+
+logical :: bounds_check_lat
+! II. Latitude -- y-direction
+!    A. PERIODIC (polar = .true.)
+!
+!       Consider Mass-grid (& U-Grid) latitude grid with 4 south-north gridpoints
+!         Values  :: [ -67.5 -22.5  22.5  67.5 ] 
+!         Indices :: [   1     2     3     4   ] 
+!       Complementary V-grid 
+!         Values  :: [ -90   -45     0    45    90 ] 
+!         Indices :: [   1     2     3     4     5 ] 
+!
+!       What are the allowable values for a real-valued index on each of these grids?
+!       1. M-grid  --->  [0.5 4.5]   ---> [0.5 sn+0.5]
+!                  --->  [-90 90]  
+!       2. U-grid  --->  [1 5]       ---> [1 sns]
+!                  --->  [-90 90]
+!       [Note that above "allowable values" reflect that one should be able to have
+!        an observation anywhere along a give latitude circle -- the information 
+!        exists in order to successfully interpolate to anywhere over [-90 90]; 
+!        however, in latitude this poses a special challenge since the seams join
+!        two separate columns of data over the pole, as opposed to in longitude
+!        where the seam wraps back on a single row of data.]  
+!
+!       It is up to the routine calling "boundsCheck" to have handled the 0.5 offset
+!         in indices between the M-grid & V-grid.  Hence, two examples: 
+!          a. If there is an observation location at -75 latitude, then:
+!             * An observation of TYPE_T (on the M-grid) would have ind = 0.833
+!             * An observation of TYPE_V (on the V-grid) would have ind = 1.333
+!          b. If there is an observation location at 0 latitude, then:
+!             * An observation of TYPE_T (on the M-grid) would have ind = 2.5
+!             * An observation of TYPE_V (on the V-grid) would have ind = 3.0
+!
+!    B. NOT periodic (polar = .false.)
+!
+!       Consider Mass-grid (& U-Grid) latitude grid with 4 south-north gridpoints
+!         Values  :: [ 10  20  30  40 ] 
+!         Indices :: [  1   2   3   4 ] 
+!       Complementary V-grid 
+!         Values  :: [  5  15  25  35  45 ] 
+!         Indices :: [  1   2   3   4   5 ] 
+!
+!       What are the allowable values for a real-valued index on each of these grids?
+!       1. M-grid  --->  [1 4]   ---> [1 sn]
+!                  --->  [10 40]  
+!       2. U-grid  --->  [1.5 4.5]       ---> [1.5 sn+0.5]
+!                  --->  [10 40]
+!       [Note that above "allowable values" reflect that one should only be able to
+!        have an observation within the M-grid, since that is the only way to  
+!        guarantee that the necessary information exists in order to successfully 
+!        interpolate to a specified location.]
+!
+!       It is up to the routine calling "boundsCheck" to have handled the 0.5 offset
+!         in indices between the M-grid & V-grid.  Hence, two examples: 
+!          a. If there is an observation location at 11 latitude, then:
+!             * An observation of TYPE_T (on the M-grid) would have ind = 1.1
+!             * An observation of TYPE_V (on the V-grid) would have ind = 1.6
+!          b. If there is an observation location at 25 latitude, then:
+!             * An observation of TYPE_T (on the M-grid) would have ind = 2.5
+!             * An observation of TYPE_V (on the V-grid) would have ind = 3.0
+!
+
+if ( grid(id)%periodic_y ) then
+        
+     ! We need to check staggering because M and V grids allow different indices
+
+!*** NOTE: For now are disallowing observation locations that occur poleward of the 
+!            first and last M-grid gridpoints.  This means that this function will 
+!            return false for polar observations.  This need not be the case because
+!            the information should be available for proper interpolation across the
+!            poles, but it will require more clever thinking.  Hopefully this can 
+!            be added in later.  
+
+    ! Check staggering by comparing var_size(dim,type) to the staggered dimension 
+    if ( on_v_grid(wrf_dom(id), var_id) ) then
+       ! V-grid allows integer range [1 sns)
+       if ( ind >= 1 .and. ind < grid(id)%sns ) bounds_check_lat = .true.
+    else  
+       ! For now we will set a logical flag to more restrictively check the array
+       !   bounds under our no-polar-obs assumptions
+       if ( restrict_polar ) then
+          ! M & U-grid allow integer range [1 sn) in practice (though properly, [0 sns) )
+          if ( ind >= 1 .and. ind < grid(id)%sn ) bounds_check_lat = .true.
+       else
+          ! M & U-grid allow integer range [0 sns) in unrestricted circumstances
+          if ( ind >= 0 .and. ind < grid(id)%sns ) bounds_check_lat = .true.
+       endif
+    endif
+    
+ else
+
+    ! We need to check staggering because M and V grids allow different indices
+    if ( on_v_grid(wrf_dom(id), var_id) ) then
+       ! V-grid allows [1 sns)
+       if ( ind >= 1 .and. ind < grid(id)%sns ) bounds_check_lat = .true.
+    else 
+       ! M & U-grid allow [1 sn)
+       if ( ind >= 1 .and. ind < grid(id)%sn ) bounds_check_lat = .true.
+    endif
+
+ endif
+
+end function bounds_check_lat
+
+
+!------------------------------------------------------------------
+function bounds_check_vertical(ind, id, var_id) 
+
+integer,  intent(in)  :: ind ! index into the grid
+integer,  intent(in)  :: id  ! domain id
+integer,  intent(in)  :: var_id
+
+logical :: bounds_check_vertical
+! III. Vertical -- z-direction (periodicity not an issue)
+!    
+!    Consider Mass vertical grid with 4 bottom-top gridpoints
+!      Values  :: [ 0.875 0.625 0.375 0.125 ]
+!      Indices :: [   1     2     3     4   ]
+!    Complementary W-grid
+!      Values  :: [   1   0.75  0.50  0.25    0   ]
+!      Indices :: [   1     2     3     4     5   ]
+!
+!    What are the allowable values for a real-valued index on each of these grids?
+!    1. M-grid  --->  [1 4]           ---> [1 bt]
+!               --->  [0.875 0.125]  
+!    2. W-grid  --->  [1.5 4.5]       ---> [1.5 bt+0.5]
+!               --->  [0.875 0.125]
+!
+!    [Note that above "allowable values" reflect that one should only be able to
+!     have an observation within the M-grid, since that is the only way to  
+!     guarantee that the necessary information exists in order to successfully 
+!     interpolate to a specified location.]
+
+bounds_check_vertical = .false.
+
+if ( on_w_grid(wrf_dom(id), var_id) ) then
+   ! W vertical grid allows [1 bts)
+   if ( ind >= 1 .and. ind < grid(id)%bts ) bounds_check_vertical = .true.
+else
+   ! M vertical grid allows [1 bt)
+   if ( ind >= 1 .and. ind < grid(id)%bt ) bounds_check_vertical = .true.
+endif
+  
+end function bounds_check_vertical 
+
+!------------------------------------------------------------------
+! Summary of Allowable REAL-VALUED Index Values ==> INTEGER Index Values 
+!
+! In longitude (x) direction
+!   Periodic     & M_grid ==> [1 we+1)       ==> [1 wes)
+!   Periodic     & U_grid ==> [1 wes)        ==> [1 wes)
+!   NOT Periodic & M_grid ==> [1 we]         ==> [1 we)
+!   NOT Periodic & U_grid ==> [1.5 we+0.5]   ==> [1 wes)
+! In latitude (y) direction
+!   Periodic     & M_grid ==> [0.5 sn+0.5]   ==> [0 sns) *though in practice, [1 sn)*
+!   Periodic     & V_grid ==> [1 sns]        ==> [1 sns) *though allowable range, [1.5 sn+.5]*
+!   NOT Periodic & M_grid ==> [1 sn]         ==> [1 sn)
+!   NOT Periodic & V_grid ==> [1.5 sn+0.5]   ==> [1 sns)
+! In vertical (z) direction
+!                  M_grid ==> [1 bt]         ==> [1 bt)
+!                  W_grid ==> [1.5 bt+0.5]   ==> [1 bts)
+!------------------------------------------------------------------
 
 !------------------------------------------------------------------
 ! Vortex
