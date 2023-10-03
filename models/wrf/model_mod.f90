@@ -380,7 +380,7 @@ qty = update_qty_if_location_is_surface(qty, location)
 call toGrid(xloc,i,dx,dxm)
 call toGrid(yloc,j,dy,dym)
 
-if ( within_bounds_horizontal(i, j, id, qty) ) then
+if ( .not. within_bounds_horizontal(i, j, id, qty) ) then
    istatus(:) = FAILED_BOUNDS_CHECK
    return
 endif
@@ -1955,7 +1955,7 @@ do ob = 1, num
    call toGrid(xloc,i,dx,dxm)
    call toGrid(yloc,j,dy,dym)
    
-   if ( within_bounds_horizontal(i, j, id, loc_qtys(ob)) ) then
+   if ( .not. within_bounds_horizontal(i, j, id, loc_qtys(ob)) ) then
       istatus(ob) = FAILED_BOUNDS_CHECK
       cycle
    endif
