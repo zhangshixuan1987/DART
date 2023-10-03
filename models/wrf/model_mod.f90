@@ -380,7 +380,7 @@ qty = update_qty_if_location_is_surface(qty, location)
 call toGrid(xloc,i,dx,dxm)
 call toGrid(yloc,j,dy,dym)
 
-if ( within_in_bounds_horizontal(i, j, id, qty) ) then
+if ( within_bounds_horizontal(i, j, id, qty) ) then
    istatus(:) = FAILED_BOUNDS_CHECK
    return
 endif
@@ -1955,7 +1955,7 @@ do ob = 1, num
    call toGrid(xloc,i,dx,dxm)
    call toGrid(yloc,j,dy,dym)
    
-   if ( within_in_bounds_horizontal(i, j, id, loc_qtys(ob)) ) then
+   if ( within_bounds_horizontal(i, j, id, loc_qtys(ob)) ) then
       istatus(ob) = FAILED_BOUNDS_CHECK
       cycle
    endif
@@ -2811,12 +2811,12 @@ end function on_t_grid
 !------------------------------------------------------------------
 !------------------------------------------------------------------
 
-function within_in_bounds_horizontal(i, j, id, qty_in)
+function within_bounds_horizontal(i, j, id, qty_in)
 
 integer, intent(in) :: i, j
 integer, intent(in) :: id
 integer, intent(in) :: qty_in
-logical :: within_in_bounds_horizontal
+logical :: within_bounds_horizontal
 
 integer :: var_id, qty
 
@@ -2829,9 +2829,9 @@ endif
 
 var_id = get_varid_from_kind(wrf_dom(id), qty) 
 
-within_in_bounds_horizontal = (bounds_check_lon(i, id, var_id) .and. bounds_check_lat(j, id, var_id))
+within_bounds_horizontal = (bounds_check_lon(i, id, var_id) .and. bounds_check_lat(j, id, var_id))
 
-end function within_in_bounds_horizontal
+end function within_bounds_horizontal
 
 !------------------------------------------------------------------
 function able_to_interpolate_qty(id, qty)
