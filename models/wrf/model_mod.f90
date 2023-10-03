@@ -368,13 +368,7 @@ if (.not. able_to_interpolate_qty(id, qty_in) ) then
    return
 endif
 
-if (qty_in == QTY_TEMPERATURE) then 
-   qty = QTY_POTENTIAL_TEMPERATURE
-else
-   qty = qty_in
-endif
-
-qty = update_qty_if_location_is_surface(qty, location)
+qty = update_qty_if_location_is_surface(qty_in, location)
 
 ! horizontal location mass point
 call toGrid(xloc,i,dx,dxm)
