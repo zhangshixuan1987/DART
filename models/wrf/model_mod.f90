@@ -368,9 +368,13 @@ if (.not. able_to_interpolate_qty(id, qty_in) ) then
    return
 endif
 
-qty = update_qty_if_location_is_surface(qty_in, location)
+if (qty_in == QTY_TEMPERATURE) then 
+   qty = QTY_POTENTIAL_TEMPERATURE
+else
+   qty = qty_in
+endif
 
-! need to force QTY_POTENTIAL_TEMPERATURE
+qty = update_qty_if_location_is_surface(qty, location)
 
 ! horizontal location mass point
 call toGrid(xloc,i,dx,dxm)
@@ -882,6 +886,8 @@ varloop: do i = 1, MAX_STATE_VARIABLES
       call error_handler(E_ERR,'verify_state_variables',string1)
    endif
    
+   ! Force QTY_TEMPERATURE to  QTY_POTENTIAL_TEMPERATURE
+   if (qty(i) == QTY_TEMPERATURE) qty(i) = QTY_POTENTIAL_TEMPERATURE
    ! Make sure the update variable has a valid name
    select case (update_str)
       case ('UPDATE')
@@ -2805,14 +2811,21 @@ end function on_t_grid
 !------------------------------------------------------------------
 !------------------------------------------------------------------
 
-function within_in_bounds_horizontal(i, j, id, qty)
+function within_in_bounds_horizontal(i, j, id, qty_in)
 
 integer, intent(in) :: i, j
 integer, intent(in) :: id
-integer, intent(in) :: qty
+integer, intent(in) :: qty_in
 logical :: within_in_bounds_horizontal
 
-integer :: var_id
+integer :: var_id, qty
+
+! Force QTY_TEMPERATURE to QTY_POTENTIAL_TEMPERATURE
+if (qty_in == QTY_TEMPERATURE) then
+   qty = QTY_POTENTIAL_TEMPERATURE
+else
+   qty = qty_in
+endif
 
 var_id = get_varid_from_kind(wrf_dom(id), qty) 
 
