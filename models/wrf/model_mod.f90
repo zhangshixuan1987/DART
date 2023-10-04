@@ -420,7 +420,8 @@ select case (qty)
    case (QTY_VORTEX_LAT, QTY_VORTEX_LON, QTY_VORTEX_PMIN, QTY_VORTEX_WMAX)
       call vortex()
    case (QTY_GEOPOTENTIAL_HEIGHT)
-      print*, 'Do you need to adjust zloc = zloc+0.5_r8?'
+      zloc(:) = zloc(:) + 0.5_r8 ! Adjust zloc for staggered
+      k(:) = max(1,int(zloc(:)))  ! Adjust corresponding level k
       fld_k1 = geopotential_height_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
       fld_k2 = geopotential_height_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
    case (QTY_SURFACE_ELEVATION)
@@ -1641,7 +1642,6 @@ real(r8) :: geopotential_height_interpolate(ens_size)
 
 real(r8), dimension(ens_size) :: a1
 
-! In terms of perturbation potential temperature
 a1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
 ! phb is constant across the ensemble, so use k(1)
@@ -2000,11 +2000,13 @@ do ob = 1, num
             !              dx*stat_dat(id)%hgt(i+1,j+1) )
          else
             ! adding 0.5 to get to the staggered vertical grid for height
-            call toGrid(zloc(1)+0.5,k(1),dz,dzm)
+            zloc = zloc + 0.5_r8 ! Adjust zloc for staggered
+            call toGrid(zloc(1),k(1),dz,dzm)
             zk  = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
             zk1 = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
-            geop = vertical_interpolation(ens_size, zloc+0.5, zk, zk1)
+            geop = vertical_interpolation(ens_size, zloc, zk, zk1)
             zout = compute_geometric_height(geop(1), grid(id)%latitude(i, j))
+print*, 'HK geop, zout', geop, zout
         endif
 
       case (VERTISSCALEHEIGHT)
