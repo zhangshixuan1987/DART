@@ -2005,7 +2005,7 @@ do ob = 1, num
             zk  = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
             zk1 = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
             geop = vertical_interpolation(ens_size, zloc, zk, zk1)
-            zout = compute_geometric_height(geop(1), grid(id)%latitude(i, j))
+            zout = compute_geometric_height(geop(1), lon_lat_vert(2))
 print*, 'HK geop, zout', geop, zout
         endif
 
