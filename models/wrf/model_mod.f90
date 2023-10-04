@@ -2006,7 +2006,13 @@ do ob = 1, num
             zk1 = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
             geop = vertical_interpolation(ens_size, zloc, zk, zk1)
             zout = compute_geometric_height(geop(1), lon_lat_vert(2))
-print*, 'HK geop, zout', geop, zout
+print*, 'HK geop, zout, new', geop, zout
+
+ 
+            zk = interpolate_geometric_height(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+            zk1 = interpolate_geometric_height(ens_size, state_handle, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
+            zout = vertical_interpolation(ens_size, zloc, zk, zk1)
+print*, 'HK zout new', zout
         endif
 
       case (VERTISSCALEHEIGHT)
@@ -2036,6 +2042,59 @@ print*, 'HK geop, zout', geop, zout
 enddo
 
 end subroutine convert_vertical_obs
+
+
+!------------------------------------------------------------------
+function interpolate_geometric_height(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+
+integer,             intent(in) :: ens_size
+type(ensemble_type), intent(in) :: state_handle
+integer,             intent(in) :: id
+integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
+integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
+real(r8),            intent(in) :: dxm, dx, dy, dym
+real(r8) :: interpolate_geometric_height(ens_size)
+
+integer :: e ! loop variable
+! lower left, upper left, lower right, upper right
+integer(i8), dimension(ens_size)  :: ill, iul, ilr, iur  ! dart index at four corners
+real(r8),    dimension(ens_size)  :: x_ill, x_iul, x_ilr, x_iur ! state value at four corners
+real(r8),    dimension(ens_size)  :: geop_ll, geop_ul, geop_lr, geop_ur ! geopotential height at four corners
+real(r8),    dimension(ens_size)  :: geomet_ll, geomet_ul, geomet_lr, geomet_ur ! geometric height at four corners
+integer :: var_id
+
+var_id = get_varid_from_kind(wrf_dom(id), QTY_GEOPOTENTIAL_HEIGHT)
+
+do e = 1, ens_size
+                              !   x,     y,     z,    domain,      variable
+   ill(e) = get_dart_vector_index(ll(1), ll(2), k(e), wrf_dom(id), var_id)
+   iul(e) = get_dart_vector_index(ul(1), ul(2), k(e), wrf_dom(id), var_id)
+   ilr(e) = get_dart_vector_index(lr(1), lr(2), k(e), wrf_dom(id), var_id)
+   iur(e) = get_dart_vector_index(ur(1), ur(2), k(e), wrf_dom(id), var_id)
+
+enddo
+
+call get_state_array(x_ill, ill, state_handle)
+call get_state_array(x_iul, iul, state_handle)
+call get_state_array(x_ilr, ilr, state_handle)
+call get_state_array(x_iur, iur, state_handle)
+
+do e = 1, ens_size
+   geop_ll(e) = (stat_dat(id)%phb(ll(1), ll(2), k(e)) + x_ill(e)) / gravity
+   geop_ul(e) = (stat_dat(id)%phb(ul(1), ul(2), k(e)) + x_iul(e)) / gravity
+   geop_lr(e) = (stat_dat(id)%phb(lr(1), lr(2), k(e)) + x_ilr(e)) / gravity
+   geop_ur(e) = (stat_dat(id)%phb(ur(1), ur(2), k(e)) + x_iur(e)) / gravity
+
+   geomet_ll(e) = compute_geometric_height(geop_ll(e), grid(id)%latitude(ll(1), ll(2)))
+   geomet_ul(e) = compute_geometric_height(geop_ul(e), grid(id)%latitude(ul(1), ul(2)))
+   geomet_lr(e) = compute_geometric_height(geop_lr(e), grid(id)%latitude(lr(1), lr(2)))
+   geomet_ur(e) = compute_geometric_height(geop_ur(e), grid(id)%latitude(ur(1), ur(2)))
+
+enddo
+
+interpolate_geometric_height = dym*( dxm*geomet_ll(:) + dx*geomet_lr(:) ) + dy*( dxm*geomet_ul(:) + dx*geomet_ur(:) )
+
+end function interpolate_geometric_height
 
 !------------------------------------------------------------------
 ! model height any grid u,v,w,t
