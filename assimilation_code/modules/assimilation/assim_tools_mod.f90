@@ -687,7 +687,7 @@ SEQUENTIAL_OBS: do i = 1, obs_ens_handle%num_vars
       my_state_loc, my_state_kind, my_state_indx, num_close_states, close_state_ind, close_state_dist,  &
       ens_handle, last_base_states_loc, last_num_close_states, num_close_states_cached,              &
       num_close_states_calls_made)
-   !call test_close_obs_dist(close_state_dist, num_close_states, i)
+   call test_close_obs_dist(close_state_dist, num_close_states, i)
 
    ! Loop through to update each of my state variables that is potentially close
    STATE_UPDATE: do j = 1, num_close_states

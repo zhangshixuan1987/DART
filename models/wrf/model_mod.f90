@@ -581,11 +581,18 @@ do i = 1, num_close
    loc_qtys_ar(1) = loc_qtys(t_ind)   ! HK not used in convert_vertical_state todo: use dummy instead?
    loc_indx_ar(1) = loc_indx(t_ind)
 
-   ! convert_vertical_state always returns istatus = 0
-   call convert_vertical_state(state_handle, 1, loc_ar, loc_qtys_ar, loc_indx_ar, vert_localization_coord, istatus(1))
-   dist(i) = get_dist(base_loc, loc_ar(1), base_type, loc_qtys(t_ind))
+if (vertical_localization_on()) then
+    if (nint(query_location(loc_ar(1))) /= vert_localization_coord) then
+       ! convert_vertical_state always returns istatus = 0
+       call convert_vertical_state(state_handle, 1, loc_ar, loc_qtys_ar, loc_indx_ar, vert_localization_coord, istatus(1))
+    endif
+endif
+       
+dist(i) = get_dist(base_loc, loc_ar(1), base_type, loc_qtys(t_ind))
  
 enddo
+
+print*, 'HK num_close', num_close
 
 end subroutine get_close_state
 
@@ -1882,7 +1889,11 @@ do i = 1, num
 
    locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
 
+   if (i < 5) print*, locs(i)
+
 enddo
+
+
 
 end subroutine convert_vertical_state
 
