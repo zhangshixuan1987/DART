@@ -592,8 +592,6 @@ do i = 1, num_close
  
 enddo
 
-print*, 'HK num_close', num_close
-
 end subroutine get_close_state
 
 
@@ -2015,13 +2013,11 @@ do ob = 1, num
             zk1 = geopotential_height_interpolate(ens_size, state_handle, QTY_GEOPOTENTIAL_HEIGHT, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
             geop = vertical_interpolation(ens_size, zloc, zk, zk1)
             zout = compute_geometric_height(geop(1), lon_lat_vert(2))
-print*, 'HK geop, zout, new', geop, zout
 
  
             zk = interpolate_geometric_height(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
             zk1 = interpolate_geometric_height(ens_size, state_handle, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
             zout = vertical_interpolation(ens_size, zloc, zk, zk1)
-print*, 'HK zout new', zout
         endif
 
       case (VERTISSCALEHEIGHT)
