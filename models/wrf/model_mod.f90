@@ -581,14 +581,14 @@ do i = 1, num_close
    loc_qtys_ar(1) = loc_qtys(t_ind)   ! HK not used in convert_vertical_state todo: use dummy instead?
    loc_indx_ar(1) = loc_indx(t_ind)
 
-if (vertical_localization_on()) then
-    if (nint(query_location(loc_ar(1))) /= vert_localization_coord) then
-       ! convert_vertical_state always returns istatus = 0
-       call convert_vertical_state(state_handle, 1, loc_ar, loc_qtys_ar, loc_indx_ar, vert_localization_coord, istatus(1))
-    endif
-endif
+   if (vertical_localization_on()) then
+       if (nint(query_location(loc_ar(1))) /= vert_localization_coord) then
+          ! convert_vertical_state always returns istatus = 0
+          call convert_vertical_state(state_handle, 1, loc_ar, loc_qtys_ar, loc_indx_ar, vert_localization_coord, istatus(1))
+       endif
+   endif
        
-dist(i) = get_dist(base_loc, loc_ar(1), base_type, loc_qtys(t_ind))
+   dist(i) = get_dist(base_loc, loc_ar(1), base_type, loc_qtys(t_ind))
  
 enddo
 
@@ -1877,9 +1877,9 @@ do i = 1, num
       vert = model_pressure(ip, jp, kp, id, var_id, state_id, state_handle)
    
    elseif (which_vert == VERTISHEIGHT) then
-   
+
       vert = model_height(ip, jp, kp, id, loc_qtys(i), var_id, state_id, state_handle)
-   
+
    elseif (which_vert == VERTISSCALEHEIGHT) then
    
       vert = -log(model_pressure(ip, jp, kp, id, var_id, state_id, state_handle) / &
@@ -1888,8 +1888,6 @@ do i = 1, num
    endif
 
    locs(i) = set_location(lon_lat_vert(1), lon_lat_vert(2), vert, which_vert)
-
-   if (i < 5) print*, locs(i)
 
 enddo
 
@@ -2156,7 +2154,7 @@ elseif( on_w_grid(state_id, var_id) ) then
    i1 = get_dart_vector_index(i,j,k, state_id, gz_id)
    x_i1 = get_state(i1, state_handle)
 
-   geop = stat_dat(id)%phb(i,j,k)+x_i1(1)/gravity
+   geop = minval(stat_dat(id)%phb(i,j,k)+x_i1)/gravity
    model_height = compute_geometric_height(geop, grid(id)%latitude(i, j))
 
 ! If U-grid, then height is defined between U points, both in horizontal
@@ -2367,7 +2365,6 @@ elseif( on_v_grid(state_id, var_id) ) then
 
          ! The lower corner is 180 degrees of longitude away
          off = i + grid(id)%we/2
-         if ( off > grid(id)%we ) off = off - grid(id)%we
          if ( off > grid(id)%we ) off = off - grid(id)%we
 
          i1 = get_dart_vector_index(off,j,k  , state_id, gz_id)
