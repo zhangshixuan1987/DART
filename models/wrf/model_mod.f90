@@ -2485,6 +2485,8 @@ if (use_log) then
    else
       extrap_pressure = exp(intermediate)
    endif
+else
+   extrap_pressure = (3.0_r8*p1(1) - p2(1))/2.0_r8
 endif
 
 end function extrap_pressure
@@ -2502,7 +2504,6 @@ real(r8)                        :: model_pressure
 
 real(r8) :: p(1), p_one(1), p_two(1) ! only using the mean, so calling model_pressure_t with ens_size=1
 integer   :: k(1), off, n
-real(r8) :: intermediate
 
 k(1) = kp ! array version
 
@@ -2511,6 +2512,7 @@ do n = 1, get_num_dims(state_id, var_id)
    if ( get_dim_name(state_id, var_id, n) == 'soil_layers_stag' ) then
       p = model_pressure_s(i, j, id, state_handle, 1)
       model_pressure = p(1)
+      return
    endif
 enddo
 
@@ -2549,8 +2551,8 @@ elseif (on_u_grid(state_id, var_id)) then ! average in the horizontal u directio
       if ( grid(id)%periodic_x ) then
 
           ! We are at seam in longitude, take first and last M-grid points
-          p_one = model_pressure_t(i-1,   j, k, id, state_handle, 1)
-          p_two = model_pressure_t(1, j, k, id, state_handle, 1)
+          p_one = model_pressure_t(i-1,j, k, id, state_handle, 1)
+          p_two = model_pressure_t(1,  j, k, id, state_handle, 1)
           model_pressure = interp_pressure(p_one, p_two, log_horz_interpM)
 
       else
@@ -2567,10 +2569,9 @@ elseif (on_u_grid(state_id, var_id)) then ! average in the horizontal u directio
       if ( grid(id)%periodic_x ) then
 
          ! We are at seam in longitude, take first and last M-grid points
-         p_one = model_pressure_t(i, j, k, id, state_handle, 1)
+         p_one = model_pressure_t(i,           j, k, id, state_handle, 1)
          p_two = model_pressure_t(grid(id)%we, j, k, id, state_handle, 1)
          model_pressure = interp_pressure(p_one, p_two, log_horz_interpM)
-   
       else
 
          ! If not periodic, then try extrapolating
