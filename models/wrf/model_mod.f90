@@ -1544,7 +1544,7 @@ real(r8) :: model_rho_t(ens_size)
 
 integer(i8), dimension(ens_size) :: imu,iph,iphp1
 real(r8),    dimension(ens_size) :: ph_e, x_imu, x_iph, x_iphp1
-integer :: var_id_mu, var_id_ph, e, lev1(ens_size)
+integer :: var_id_mu, var_id_ph, e
 
 ! Adapted the code from WRF module_big_step_utilities_em.F ----
 !         subroutine calc_p_rho_phi      Y.-R. Guo (10/20/2004)
@@ -1553,11 +1553,10 @@ integer :: var_id_mu, var_id_ph, e, lev1(ens_size)
 
 var_id_mu = get_varid_from_varname(wrf_dom(id), 'MU')
 var_id_ph = get_varid_from_kind(wrf_dom(id), QTY_GEOPOTENTIAL_HEIGHT)
-lev1(:) = 1
 
 do e = 1, ens_size
-   imu   = get_dart_vector_index(i,j,lev1(e), wrf_dom(id), var_id_mu)
-   iph   = get_dart_vector_index(i,j,k(e), wrf_dom(id), var_id_ph)
+   imu   = get_dart_vector_index(i,j,1,      wrf_dom(id), var_id_mu)
+   iph   = get_dart_vector_index(i,j,k(e),   wrf_dom(id), var_id_ph)
    iphp1 = get_dart_vector_index(i,j,k(e)+1, wrf_dom(id), var_id_ph)
 enddo
 
@@ -1565,8 +1564,10 @@ call get_state_array(x_imu, imu, state_handle)
 call get_state_array(x_iph, iph, state_handle)
 call get_state_array(x_iphp1, iphp1, state_handle)
 
-ph_e = ( (x_iphp1 + stat_dat(id)%phb(i,j,k+1)) &
-       - (x_iph   + stat_dat(id)%phb(i,j,k  )) ) / stat_dat(id)%dnw(k)
+do e = 1, ens_size
+   ph_e(e) = ( (x_iphp1(e) + stat_dat(id)%phb(i,j,k(e)+1)) &
+             - (x_iph(e)   + stat_dat(id)%phb(i,j,k(e)  )) ) / stat_dat(id)%dnw(k(e))
+enddo
 
 ! rho = - mu / dphi/deta
 model_rho_t(:) = - (stat_dat(id)%mub(i,j)+x_imu) / ph_e
