@@ -400,8 +400,8 @@ select case (qty)
       fld_k1 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym) + ts0
       fld_k2 = simple_interpolation(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym) + ts0
    case (QTY_DENSITY)
-      fld_k1 = density_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
-      fld_k2 = density_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
+      fld_k1 = density_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+      fld_k2 = density_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k+1, dxm, dx, dy, dym)
    case (QTY_VERTICAL_VELOCITY)
       zloc(:) = zloc(:) + 0.5_r8 ! Adjust zloc for staggered
       k(:) = max(1,int(zloc(:)))  ! Adjust corresponding level k
@@ -1480,8 +1480,6 @@ real(r8)                           :: interp_4pressure(ens_size)
 
 real(r8) :: l1(ens_size), l2(ens_size), l3(ens_size), l4(ens_size)
 
-integer :: i
-
 if (log_horz_interpQ) then
    l1 = log(p1)
    l2 = log(p2)
@@ -1577,11 +1575,10 @@ end function model_rho_t
 
 
 !------------------------------------------------------------------
-function density_interpolate(ens_size, state_handle, qty, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
+function density_interpolate(ens_size, state_handle, id, ll, ul, lr, ur, k, dxm, dx, dy, dym)
 
 integer,             intent(in) :: ens_size
 type(ensemble_type), intent(in) :: state_handle
-integer,             intent(in) :: qty
 integer,             intent(in) :: id
 integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four corners
 integer,             intent(in) :: k(ens_size) ! k may be different across the ensemble
@@ -1698,7 +1695,7 @@ integer,             intent(in) :: k(ens_size) ! k may be different across the e
 real(r8),            intent(in) :: dxm, dx, dy, dym
 real(r8) :: pressure_interpolate(ens_size)
 
-real(r8), dimension(ens_size) :: pres, pres1, pres2, pres3, pres4
+real(r8), dimension(ens_size) :: pres1, pres2, pres3, pres4
 
 pres1 = model_pressure_t(ll(1), ll(2), k, id, state_handle, ens_size)
 pres2 = model_pressure_t(lr(1), lr(2), k, id, state_handle, ens_size)
@@ -1720,7 +1717,7 @@ integer,             intent(in) :: ll(2), ul(2), lr(2), ur(2) ! (x,y) at  four c
 real(r8),            intent(in) :: dxm, dx, dy, dym
 real(r8) :: surface_pressure_interpolate(ens_size)
 
-real(r8), dimension(ens_size) :: pres, pres1, pres2, pres3, pres4
+real(r8), dimension(ens_size) :: pres1, pres2, pres3, pres4
 integer :: e
 
 pres1 = model_pressure_s(ll(1), ll(2), id, state_handle, ens_size)
