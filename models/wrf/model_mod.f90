@@ -2517,13 +2517,13 @@ do n = 1, get_num_dims(state_id, var_id)
    endif
 enddo
 
-!HK todo surface qtys
-
-if (on_t_grid(state_id, var_id)) then
-   p = model_pressure_t(i, j, k, id, state_handle, 1)
+if (get_num_dims(state_id, var_id) == 2) then ! surface qty
+   p = model_pressure_s(i, j, id, state_handle, 1)
    model_pressure = p(1)
+   return
+endif
 
-elseif (on_w_grid(state_id, var_id)) then ! average in the vertical
+if (on_w_grid(state_id, var_id)) then ! average in the vertical
 
    if (kp==1) then ! on boundary, extrapolate in the vertical
 
@@ -2634,12 +2634,16 @@ elseif (on_v_grid(state_id, var_id)) then ! average in the horizontal v directio
        endif
 
     else
-
-      p_one = model_pressure_t(i, j,k, id, state_handle, 1) 
-      p_two = model_pressure_t(i, j+1, k, id, state_handle, 1)
+      p_one = model_pressure_t(i, j   ,k, id, state_handle, 1) 
+      p_two = model_pressure_t(i, j-1, k, id, state_handle, 1)
       model_pressure = interp_pressure(p_one, p_two, log_horz_interpM)
 
     endif
+
+else ! on t_grid
+
+   p = model_pressure_t(i, j, k, id, state_handle, 1)
+   model_pressure = p(1) 
 
 endif
 
