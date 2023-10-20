@@ -1282,12 +1282,12 @@ var_id_psfc = get_varid_from_varname(wrf_dom(id), 'PSFC')
 var_id_mu = get_varid_from_varname(wrf_dom(id), 'MU')
 
 if ( var_id_PSFC > 0 ) then
-   ips = get_dart_vector_index(i,j,1, wrf_dom(id), QTY_SURFACE_PRESSURE)
+   ips = get_dart_vector_index(i,j,1, wrf_dom(id), var_id_psfc)
    x_ips = get_state(ips, state_handle)
    model_pressure_s = x_ips
 
 elseif (var_id_mu > 0) then
-   imu = get_dart_vector_index(i,j,1, wrf_dom(id), QTY_PRESSURE)
+   imu = get_dart_vector_index(i,j,1, wrf_dom(id), var_id_mu)
    x_imu = get_state(imu, state_handle)
    model_pressure_s = stat_dat(id)%p_top + stat_dat(id)%mub(i,j) + x_imu
 
