@@ -5,7 +5,7 @@
 
 obs_rwtest:
 
-test for reading both ascii and binary obs_seq files,
+subroutine level test for reading both ascii and binary obs_seq files,
 and testing the writing out.
 
 there's a new option to open binary obs_seq files with
@@ -25,15 +25,12 @@ nsc
 11jul2016
 
 
-obs_seqtool_test:
+run_seqtool_test:
 
-start of testing the obs_sequence_tool.  it seems we need a script
-to run to create some output files and then a program can sanity check them?
+shell script that runs the obs_sequence_tool with various input.nmls.
+you need to build it in the work directory first before running it.
 
-obs_split_test:
-
-start of a test for the (as yet unwritten) obs_sequence_split program.
 
 nsc
-20oct2023
+25oct2023
 
