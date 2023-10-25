@@ -1,0 +1,86 @@
+#!/usr/bin/env bash 
+
+# DART software - Copyright UCAR. This open source software is provided
+# by UCAR, "as is", without charge, subject to all terms of use at
+# http://www.image.ucar.edu/DAReS/DART/DART_download
+
+# usage:  
+#  this program requires one or more input.nml files with various settings
+#  to be tested.  each input.nml requires an obs_seq.out file for input
+#  and creates an obs_seq file that should be verified against a provided
+#  correct output file.
+#
+#  in the filenames below, XX is always a 2 digit number starting with 01,
+#  02, 03, ...
+#
+#  these files should be placed in the seqtool_data directory for testing:
+#
+#  - one or more input.nml files with the name inputXX.nml
+#    inside the namelist, the input obs_seq should be specified as input.seq 
+#    and the output obs_seq should be specifed as output.seq
+#
+#  - one or more input obs_seq files with the name inputXX.seq
+#
+#  - one or more validation output obs_seq files with the name outputXX.seq
+#
+#
+
+tool=obs_sequence_tool
+datadir=seqtool_data
+
+nml_run=input.nml
+in_run=input.seq
+out_run=output.seq
+val_run=validate.seq
+
+let n=1
+nstr=`printf "%02d" $n`
+
+nmlfile=$datadir/input${nstr}.nml
+
+while [[ -f $nmlfile ]] ;
+do 
+
+  # copy the 01, 02, etc files to the run dir and give them
+  # names that will match the namelist settings.
+
+  infile=$datadir/input${nstr}.seq
+  valfile=$datadir/output${nstr}.seq
+
+  cp $nmlfile rundir/$nml_run 
+  cp $infile  rundir/$in_run
+  cp $valfile rundir/$val_run
+
+  cp work/$tool rundir
+
+  cd rundir
+  ./$tool 
+  tool_result=$?
+  cd ..
+ 
+  if [[ $tool_result -ne 0 ]] ; then
+    echo FAIL, test $n exited with an error code of $tool_result
+    exit $tool_result
+  fi
+ 
+  diff rundir/$out_run rundir/$val_run
+  diff_result=$?
+
+  if [[ $diff_result -ne 0 ]] ; then
+    echo FAIL, $tool ran to completion but the resulting output did not compare
+    echo check rundir/$out_run and rundir/$val_run
+    exit $diff_result
+  fi
+
+  rm rundir/* 
+
+  let n+=1
+  nstr=`printf "%02d" $n`
+  nmlfile=$datadir/input${nstr}.nml
+
+done
+
+echo SUCCESS
+echo all tests ran to completion and succeeded.
+
+exit 0

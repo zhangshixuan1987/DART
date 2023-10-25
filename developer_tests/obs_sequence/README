@@ -2,7 +2,8 @@
 # by UCAR, "as is", without charge, subject to all terms of use at
 # http://www.image.ucar.edu/DAReS/DART/DART_download
 #
-# DART $Id$
+
+obs_rwtest:
 
 test for reading both ascii and binary obs_seq files,
 and testing the writing out.
@@ -23,7 +24,16 @@ make a shell script to run some test cases, bravo.
 nsc
 11jul2016
 
-# <next few lines under version control, do not edit>
-# $URL$
-# $Revision$
-# $Date$
+
+obs_seqtool_test:
+
+start of testing the obs_sequence_tool.  it seems we need a script
+to run to create some output files and then a program can sanity check them?
+
+obs_split_test:
+
+start of a test for the (as yet unwritten) obs_sequence_split program.
+
+nsc
+20oct2023
+

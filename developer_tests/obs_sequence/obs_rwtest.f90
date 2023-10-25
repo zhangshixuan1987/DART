@@ -2,7 +2,6 @@
 ! by UCAR, "as is", without charge, subject to all terms of use at
 ! http://www.image.ucar.edu/DAReS/DART/DART_download
 !
-! $Id$
 
 !> test program that tries to open an obs_sequence file, print out
 !> basic information about it, and write the same information out.
@@ -43,10 +42,7 @@ use obs_sequence_mod, only : obs_sequence_type, obs_type, write_obs_seq,       &
 implicit none
 
 ! version controlled file description for error handling, do not edit
-character(len=*), parameter :: source   = &
-   "$URL$"
-character(len=*), parameter :: revision = "$Revision$"
-character(len=*), parameter :: revdate  = "$Date$"
+character(len=*), parameter :: source   = "obs_rwtest"
 
 type(obs_sequence_type) :: seq_in
 logical                 :: is_this_last
@@ -128,7 +124,7 @@ call read_obs_seq_header(filename_in, num_copies_in, num_qc_in, &
 
 if (max_num_obs == 0) then
    write(msgstring,*) 'No obs in input sequence file ', trim(filename_in)
-   call error_handler(E_ERR,'obs_rwtest',msgstring)
+   call error_handler(E_ERR,'FAIL: obs_rwtest',msgstring)
 endif
 
 write(msgstring, *) 'Starting to process input sequence file: '
@@ -172,7 +168,6 @@ subroutine setup()
 
 ! Initialize modules used that require it
 call initialize_utilities('obs_rwtest')
-call register_module(source,revision,revdate)
 call static_init_obs_sequence()
 
 end subroutine setup
@@ -350,8 +345,7 @@ is_there_one = get_first_obs(seq, obs)
 ! we already tested for 0 obs above, so there should be a first obs here.
 if ( .not. is_there_one )  then
    write(msgstring,*)'no first obs in sequence ' // trim(filename)
-   call error_handler(E_ERR,'obs_rwtest:validate', &
-                      msgstring, source, revision, revdate)
+   call error_handler(E_ERR,'FAIL: obs_rwtest:validate', msgstring, source)
    return
 endif
 
@@ -372,9 +366,7 @@ ObsLoop : do while ( .not. is_this_last)
       key = get_obs_key(obs)
       write(msgstring1,*)'obs number ', key, ' has earlier time than previous obs'
       write(msgstring2,*)'observations must be in increasing time order, file ' // trim(filename)
-      call error_handler(E_ERR,'obs_rwtest:validate', msgstring2, &
-                         source, revision, revdate, &
-                         text2=msgstring1)
+      call error_handler(E_ERR,'FAIL: obs_rwtest:validate', msgstring2, source, text2=msgstring1)
    endif
 
    last_time = this_time
@@ -402,14 +394,11 @@ if (obs_count /= size_seq) then
    if (obs_count > size_seq) then
       ! this is a fatal error
       write(msgstring1,*) 'linked list obs_count > total size_seq, should not happen'
-      call error_handler(E_ERR,'obs_rwtest:validate', msgstring, &
-                         source, revision, revdate, &
-                         text2=msgstring1)
+      call error_handler(E_ERR,'FAIL: obs_rwtest:validate', msgstring, source, text2=msgstring1)
    else
       ! just warning msg
       write(msgstring1,*) 'only observations in linked list will be processed'
-      call error_handler(E_MSG,'obs_rwtest:validate', msgstring, &
-                         source, revision, revdate, text2=msgstring1)
+      call error_handler(E_MSG,'obs_rwtest:validate', msgstring, source, text2=msgstring1)
    endif
 endif
 
@@ -434,8 +423,7 @@ num_qc     = get_num_qc(    seq)
 
 if ( num_copies < 0 .or. num_qc < 0 ) then
    write(msgstring3,*)' illegal copy or obs count in file '//trim(fname)
-   call error_handler(E_ERR, 'obs_rwtest', msgstring3, &
-                      source, revision, revdate)
+   call error_handler(E_ERR, 'FAIL: obs_rwtest', msgstring3, source)
 endif
 
 MetaDataLoop : do i=1, num_copies
@@ -507,8 +495,3 @@ end subroutine get_filenames
 !---------------------------------------------------------------------
 end program obs_rwtest
 
-! <next few lines under version control, do not edit>
-! $URL$
-! $Id$
-! $Revision$
-! $Date$

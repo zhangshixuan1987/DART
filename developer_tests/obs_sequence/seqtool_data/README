@@ -1,0 +1,13 @@
+#
+#  in the filenames below, XX is always a 2 digit number starting with 01,
+#  02, 03, ...
+#
+#  these files should be placed in the seqtool_data directory for testing:
+#
+#  - one or more input.nml files with the name inputXX.nml
+#    inside the namelist, the input obs_seq should be specified as input.seq 
+#    and the output obs_seq should be specifed as output.seq
+#
+#  - one or more input obs_seq files with the name inputXX.seq
+#
+#  - one or more validation output obs_seq files with the name outputXX.seq
