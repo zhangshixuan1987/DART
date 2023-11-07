@@ -1972,7 +1972,12 @@ do ob = 1, num
    select case (which_vert)
    
       case (VERTISLEVEL)
-          zout = k  !HK original code has zout = 1.0_r8 for incoming VERTISSURFACE
+
+           if (vert_coord_in == VERTISSURFACE) then
+              zout = 1.0_r8
+           else
+              zout = zloc
+           endif
 
       case (VERTISPRESSURE)
 
