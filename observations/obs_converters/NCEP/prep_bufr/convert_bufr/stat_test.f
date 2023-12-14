@@ -2,7 +2,6 @@ C DART software - Copyright UCAR. This open source software is provided
 C by UCAR, "as is", without charge, subject to all terms of use at
 C http://www.image.ucar.edu/DAReS/DART/DART_download
 C
-C DART $Id$
 
       program stat_test
 
@@ -52,7 +51,7 @@ C   MACHINE:  IBM SP
 C
 C$$$
       CHARACTER(len=80) :: infile
-      INTEGER(4)        :: narg,iargc,JSTAT(100)
+      INTEGER(4)        :: NARG,JSTAT(100)
       integer           :: i, KBYTES, rc
       integer           :: STAT
 
@@ -62,14 +61,14 @@ C  GET Filename ARGUMENTS from command line.
 C  IF THIS DOES NOT WORK, comment this entire section out and use the
 C  hardcoded filenames below.
 C
-      NARG=IARGC()
+      NARG=COMMAND_ARGUMENT_COUNT()
       IF(NARG.NE.1) THEN
         PRINT *,'stat_test:  Incorrect usage'
         PRINT *,'Usage: stat_test inputBUFRfile'
         CALL EXIT(2)
       ENDIF
 
-      call getarg(1,infile)
+      call GET_COMMAND_ARGUMENT(1,infile)
       infile = TRIM(infile)//CHAR(0)
 
 C  If your system does not support IARGC and getarg(), comment out from
@@ -109,7 +108,3 @@ c        it matches the value of INDEXVAL in grabbufr.f
       stop
       end
 
-c <next few lines under version control, do not edit>
-c $URL$
-c $Revision$
-c $Date$

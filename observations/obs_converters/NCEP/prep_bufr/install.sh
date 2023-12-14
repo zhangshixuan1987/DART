@@ -70,7 +70,7 @@ fi
 if   [ $FCOMP = intel ] ; then
    ff=ifort 
 elif [ $FCOMP = gnu ] ; then
-   ff=gfortran 
+   ff="gfortran -fallow-argument-mismatch"
 elif [ $FCOMP = pgi ] ; then
    ff=pgf90 
 elif [ $FCOMP = f77 ] ; then
@@ -88,7 +88,7 @@ fi
 
 # so far this doesn't compile with NAG - too many errors
 # we might be able to coerce it to work - but for now punt.
-if [ $ff = nagfor ]; then
+if [ "$ff" = nagfor ]; then
   echo
   echo WARNING WARNING WARNING:
   echo The prepbufr libraries do not successfully compile with NAG fortran.

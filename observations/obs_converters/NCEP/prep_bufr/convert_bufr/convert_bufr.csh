@@ -3,9 +3,11 @@
 # This file is not protected by the DART copyright agreement.
 # DART $Id$
 
- set FC = ifort
+ set FC = gfortran
+ set FCFLAGS = "-O -fallow-argument-mismatch"
+
  # or pgf90, gfortran, xlf90, g95, etc
- set FCFLAGS = "-r8 -pc 64"
+ # set FCFLAGS = "-r8 -pc 64"
 
  \rm -f *.o
 
