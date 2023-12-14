@@ -2,27 +2,25 @@
 ! by UCAR, "as is", without charge, subject to all terms of use at
 ! http://www.image.ucar.edu/DAReS/DART/DART_download
 !
-! $Id$
  
 program advance_cymdh
 
   implicit none
 
 ! version controlled file description for error handling, do not edit
-character(len=256), parameter :: source   = &
-   "$URL$"
-character(len=32 ), parameter :: revision = "$Revision$"
-character(len=128), parameter :: revdate  = "$Date$"
+character(len=256), parameter :: source   = "advance_cymdh"
+character(len=32 ), parameter :: revision = ""
+character(len=128), parameter :: revdate  = ""
 
   integer :: ccyy, mm, dd, hh, dh
 
-  integer :: nargum, i, n, sign
+  integer :: nargum, i, n, sign, length, status
 
   character(len=80), dimension(2) :: argum
 
   character(len=10) :: ccyymmddhh
 
-  nargum=iargc()
+  nargum=COMMAND_ARGUMENT_COUNT()
 
   if(nargum /= 2) then
      write(unit=*, fmt='(a)') &
@@ -34,7 +32,11 @@ character(len=128), parameter :: revdate  = "$Date$"
      do n=1,80
         argum(i)(n:n)=' '
      enddo
-     call getarg(i,argum(i))
+     call GET_COMMAND_ARGUMENT(i,argum(i),length,status)
+     if (status .ne. 0) then
+         print*, 'argument ', i, ' error on read'
+         call exit(1)
+     endif
   enddo
 
   ccyymmddhh = trim(argum(1))
@@ -121,8 +123,3 @@ contains
 
 end program advance_cymdh
 
-! <next few lines under version control, do not edit>
-! $URL$
-! $Id$
-! $Revision$
-! $Date$

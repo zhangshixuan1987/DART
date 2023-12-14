@@ -2,7 +2,6 @@
 ! by UCAR, "as is", without charge, subject to all terms of use at
 ! http://www.image.ucar.edu/DAReS/DART/DART_download
 !
-! $Id$
 
 PROGRAM grid_refl_obs
 
@@ -48,15 +47,13 @@ use time_manager_mod, only : time_type, set_date, set_time, get_time, print_time
 use    utilities_mod, only : error_handler, E_ERR, E_MSG, file_exist, &
                              initialize_utilities, finalize_utilities
 use    netcdf
-use    f2kcli
 
 implicit none
 
 ! version controlled file description for error handling, do not edit
-character(len=256), parameter :: source   = &
-   "$URL$"
-character(len=32 ), parameter :: revision = "$Revision$"
-character(len=128), parameter :: revdate  = "$Date$"
+character(len=256), parameter :: source   = "grid_refl_obs.f90"
+character(len=32 ), parameter :: revision = ""
+character(len=128), parameter :: revdate  = ""
 
 ! command-line parameters
 character(len=129) :: obs_seq_file
@@ -118,7 +115,7 @@ character(len=120) :: string
 
 call initialize_utilities('grid_refl_obs')
 
-! Get command-line parameters, using the F2KCLI interface.  See f2kcli.f90 for details.
+! Get command-line parameters, using the fortran 2003 intrinsics.
 
 if( COMMAND_ARGUMENT_COUNT() .ne. 7 ) then
   print*, 'INCORRECT # OF ARGUMENTS ON COMMAND LINE:  ', COMMAND_ARGUMENT_COUNT()
@@ -403,8 +400,3 @@ contains
 
 END PROGRAM grid_refl_obs
 
-! <next few lines under version control, do not edit>
-! $URL$
-! $Id$
-! $Revision$
-! $Date$

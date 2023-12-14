@@ -2,7 +2,6 @@
 ! by UCAR, "as is", without charge, subject to all terms of use at
 ! http://www.image.ucar.edu/DAReS/DART/DART_download
 !
-! $Id$
 
 program pert_wrf_bc
 
@@ -28,10 +27,9 @@ use         module_timediff, only : time_diff, find_time_index
 implicit none
 
 ! version controlled file description for error handling, do not edit
-character(len=256), parameter :: source   = &
-   "$URL$"
-character(len=32 ), parameter :: revision = "$Revision$"
-character(len=128), parameter :: revdate  = "$Date$"
+character(len=256), parameter :: source   = "pert_wrf_bc.f90"
+character(len=32 ), parameter :: revision = ""
+character(len=128), parameter :: revdate  = ""
 
 !-----------------------------------------------------------------------
 
@@ -60,8 +58,6 @@ integer           :: i,j,k,l,m,n
 integer           :: ntimes_bdy, ntimes_ud, ntimes_next, itime
 
 integer, dimension(4) :: dims
-
-integer, external :: iargc
 
 real(r8), allocatable, dimension(:,:) :: tend2d, scnd2d, frst2d
 
@@ -602,8 +598,3 @@ endif
 
 end program pert_wrf_bc
 
-! <next few lines under version control, do not edit>
-! $URL$
-! $Id$
-! $Revision$
-! $Date$

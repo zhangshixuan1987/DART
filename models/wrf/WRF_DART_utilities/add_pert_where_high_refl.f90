@@ -2,7 +2,6 @@
 ! by UCAR, "as is", without charge, subject to all terms of use at
 ! http://www.image.ucar.edu/DAReS/DART/DART_download
 !
-! $Id$
 
 PROGRAM add_pert_where_high_refl
 
@@ -34,15 +33,14 @@ use        types_mod, only : r8, gravity, t_kelvin, ps0, gas_constant, gas_const
 use    utilities_mod, only : error_handler, E_ERR, initialize_utilities, finalize_utilities
 use   random_seq_mod, only : random_gaussian, random_seq_type, init_random_seq
 use    netcdf
-use    f2kcli
+! use    f2kcli  (now part of fortran 2003 standard)
 
 implicit none
 
 ! version controlled file description for error handling, do not edit
-character(len=256), parameter :: source   = &
-   "$URL$"
-character(len=32 ), parameter :: revision = "$Revision$"
-character(len=128), parameter :: revdate  = "$Date$"
+character(len=256), parameter :: source   = "add_pert_where_high_refl.f90"
+character(len=32 ), parameter :: revision = ""
+character(len=128), parameter :: revdate  = ""
 
 ! command-line parameters
 character(len=129) :: refl_ob_file
@@ -704,8 +702,3 @@ contains
 
 END PROGRAM add_pert_where_high_refl
 
-! <next few lines under version control, do not edit>
-! $URL$
-! $Id$
-! $Revision$
-! $Date$
