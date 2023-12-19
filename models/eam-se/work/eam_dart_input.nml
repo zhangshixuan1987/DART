@@ -334,6 +334,10 @@
                                 'SAT_U_WIND_COMPONENT',
                                 'SAT_V_WIND_COMPONENT',
                                 'GPSRO_REFRACTIVITY'
+                                'SAT_U_WIND_COMPONENT',
+                                'SAT_V_WIND_COMPONENT',
+                                'GPSRO_REFRACTIVITY'
+
    evaluate_these_obs_types = 'RADIOSONDE_SPECIFIC_HUMIDITY',
                               'AIRS_SPECIFIC_HUMIDITY'
    /
