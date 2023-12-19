@@ -322,7 +322,6 @@
    assimilate_these_obs_types = 'RADIOSONDE_U_WIND_COMPONENT',
                                 'RADIOSONDE_V_WIND_COMPONENT',
                                 'RADIOSONDE_TEMPERATURE',
-                                'RADIOSONDE_SPECIFIC_HUMIDITY',
                                 'AIRCRAFT_U_WIND_COMPONENT',
                                 'AIRCRAFT_V_WIND_COMPONENT',
                                 'AIRCRAFT_TEMPERATURE',
@@ -334,9 +333,8 @@
                                 'SAT_U_WIND_COMPONENT',
                                 'SAT_V_WIND_COMPONENT',
                                 'GPSRO_REFRACTIVITY'
-
-   evaluate_these_obs_types = '' 
-                              
+   evaluate_these_obs_types = 'RADIOSONDE_SPECIFIC_HUMIDITY',
+                              'AIRS_SPECIFIC_HUMIDITY'
    /
 
 
