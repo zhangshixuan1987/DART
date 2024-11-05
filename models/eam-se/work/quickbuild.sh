@@ -35,6 +35,8 @@ obs_seq_coverage
 obs_seq_to_netcdf
 obs_seq_verify
 obs_sequence_tool
+compare_states
+compute_error
 )
 
 model_serial_programs=(
