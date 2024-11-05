@@ -340,7 +340,6 @@
 
    evaluate_these_obs_types = 'RADIOSONDE_SPECIFIC_HUMIDITY',
                               'AIRS_SPECIFIC_HUMIDITY'
-
    /
 
 
