@@ -334,8 +334,14 @@
                                 'SAT_U_WIND_COMPONENT',
                                 'SAT_V_WIND_COMPONENT',
                                 'GPSRO_REFRACTIVITY'
+<<<<<<< HEAD
    evaluate_these_obs_types = 'RADIOSONDE_SPECIFIC_HUMIDITY',
                               'AIRS_SPECIFIC_HUMIDITY'
+=======
+
+   evaluate_these_obs_types = '' 
+                              
+>>>>>>> b0b3864b481464e15754f7d0be9ea61664a5877a
    /
 
 
