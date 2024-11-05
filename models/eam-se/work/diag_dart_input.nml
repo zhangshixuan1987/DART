@@ -69,7 +69,6 @@
    print_box_level                 = 0
    /
 
-<<<<<<< HEAD
 &perfect_model_obs_nml
    single_file_in             = .false.,
    read_input_state_from_file = .false.,
@@ -113,8 +112,6 @@
    single_precision_output = .false.
    /
 
-=======
->>>>>>> Add files to facillitate EAM-DART data assimilation
 &ensemble_manager_nml
    layout         = 2
    tasks_per_node = 40
