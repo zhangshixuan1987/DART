@@ -1,4 +1,4 @@
-! CAM-chem 
+! EAM-chem 
 !
 ! These lists were provided by Jerome Barre' and/or Avelino Arellano.
 !
@@ -143,4 +143,4 @@
 ! 2 unit conversion arrays derived from adv_mass will be filled in map_qtys.
 real(r8), parameter :: molar_mass_dry_air = 28.9644
 
-! CAM-chem end
+! EAM-chem end
