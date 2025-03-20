@@ -1,4 +1,3 @@
-
 # options for vertical localization:  'PRESSURE', 'HEIGHT', 'SCALEHEIGHT', 'LEVEL'
 # options for vertical interpolation (use_log_vertical_scale) = .false., .true.
 #
@@ -31,6 +30,13 @@
    homme_map_file                  = 'SEMapping.nc'
    cs_grid_file                    = 'SEMapping_cs_grid.nc'
    vertical_localization_coord     = 'PRESSURE'
+   state_variables  = 'T',     'QTY_TEMPERATURE',         'NA', 'NA', 'UPDATE'
+                      'U',     'QTY_U_WIND_COMPONENT',    'NA', 'NA', 'UPDATE'
+                      'V',     'QTY_V_WIND_COMPONENT',    'NA', 'NA', 'UPDATE'
+                      'Q',     'QTY_SPECIFIC_HUMIDITY',   'NA', 'NA', 'UPDATE'
+                      'CLDLIQ','QTY_CLOUD_LIQUID_WATER',  'NA', 'NA', 'UPDATE'
+                      'CLDICE','QTY_CLOUD_ICE',           'NA', 'NA', 'UPDATE'
+                      'PS',    'QTY_SURFACE_PRESSURE',    'NA', 'NA', 'UPDATE'
    use_log_vertical_scale          = .false.
    assimilation_period_days        = 0
    assimilation_period_seconds     = 21600
@@ -39,8 +45,8 @@
    debug_level                     = 0
    suppress_grid_info_in_output    = .false.
    custom_routine_to_generate_ensemble = .true.
-   fields_to_perturb               = ""
-   perturbation_amplitude          = 0.0_r8
+   fields_to_perturb               = "QTY_TEMPERATURE"
+   perturbation_amplitude          = 0.1_r8
    using_chemistry                 = .false.
    no_normalization_of_scale_heights = .true.
 /

@@ -1,0 +1,3 @@
+QCEFF table version: 1,obs_error_info,,,,probit_inflation,,,,,probit_state,,,,,probit_extended_state,,,,,obs_inc_info,,,,
+QTY,bounded_below,bounded_above,lower_bound,upper_bound,dist_type,bounded_below,bounded_above,lower_bound,upper_bound,dist_type,bounded_below,bounded_above,lower_bound,upper_bound,dist_type,bounded_below,bounded_above,lower_bound,upper_bound,filter_kind,bounded_below,bounded_above,lower_bound,upper_bound
+QTY_TRACER_CONCENTRATION,.true.,.false.,0,-888888,NORMAL_DISTRIBUTION,.true.,.false.,0,-888888,NORMAL_DISTRIBUTION,.true.,.false.,0,-888888,NORMAL_DISTRIBUTION,.true.,.false.,0,-888888,EAKF,.true.,.false.,0,-888888
