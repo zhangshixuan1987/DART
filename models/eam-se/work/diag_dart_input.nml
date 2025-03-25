@@ -249,7 +249,6 @@
    ens_size                = 3
    single_restart_file_in  = .false.
    difference_method       = 4
-   use_only_qtys           = ''
    /
 
 
