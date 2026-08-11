@@ -30,7 +30,6 @@ use time_manager_mod, only : time_type, set_time
 implicit none
 private
 
-
 ! allow global sum to be computed for integers, r4, and r8s
 interface sum_across_tasks
    module procedure sum_across_tasks_int4
