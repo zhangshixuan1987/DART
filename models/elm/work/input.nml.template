@@ -1,0 +1,96 @@
+
+&preprocess_nml
+    input_obs_qty_mod_file = '../../../assimilation_code/modules/observations/DEFAULT_obs_kind_mod.F90'
+   output_obs_qty_mod_file = '../../../assimilation_code/modules/observations/obs_kind_mod.f90'
+     input_obs_def_mod_file = '../../../observations/forward_operators/DEFAULT_obs_def_mod.F90'
+    output_obs_def_mod_file = '../../../observations/forward_operators/obs_def_mod.f90'
+   obs_type_files           = '../../../observations/forward_operators/obs_def_land_mod.f90',
+                              '../../../observations/forward_operators/obs_def_tower_mod.f90',
+                              '../../../observations/forward_operators/obs_def_COSMOS_mod.f90'
+   quantity_files           = '../../../assimilation_code/modules/observations/land_quantities_mod.f90'
+   /
+
+
+&obs_sequence_nml
+   write_binary_obs_sequence = .false.
+   /
+
+
+&obs_kind_nml
+   assimilate_these_obs_types = 'SOIL_TEMPERATURE',
+                                'SOIL_MOISTURE',
+                                'BIOMASS',
+                                'MODIS_FPAR',
+                                'MODIS_SNOWCOVER_FRAC',
+                                'COSMOS_NEUTRON_INTENSITY',
+                                'MODIS_LEAF_AREA_INDEX',
+                                'OCO2_SIF',
+                                'LEAF_NITROGEN',
+                                'ECOSTRESS_ET',
+                                'TOWER_NETC_ECO_EXCHANGE',
+                                'TOWER_LATENT_HEAT_FLUX',
+                                'TOWER_SENSIBLE_HEAT_FLUX'
+   /
+
+
+# This input.nml.template is only used for the obs_sequence_tool.
+# The actual model settings are inconsequential.
+
+&model_nml
+   clm_restart_filename         = 'clm_dart.clm2.r.2013-07-02-00000.nc'
+   clm_history_filename         = 'clm_dart.clm2.h0.2013-07-02-00000.nc'
+   assimilation_period_days     = 2
+   assimilation_period_seconds  = 3600
+   calendar                     = 'gregorian'
+   debug                        = 0
+   clm_variables =
+       'frac_sno',    'QTY_SNOWCOVER_FRAC',   '0.0', 'NA', 'restart', 'NO_COPY_BACK'
+       'EFLX_LH_TOT', 'QTY_LATENT_HEAT_FLUX', 'NA',  'NA', 'history', 'NO_COPY_BACK'
+   /
+
+
+&obs_sequence_tool_nml
+   filename_seq      = ''
+   filename_seq_list = 'olist'
+   filename_out      = 'OUTDIR/obs_seq.YYYY-MM-DD-SSSSS'
+   print_only        = .false.
+   gregorian_cal     = .true.
+   first_obs_days    = DART1D
+   first_obs_seconds = DART1S
+   last_obs_days     = DARTND
+   last_obs_seconds  = DARTNS
+   edit_qc_metadata  = .true.
+   new_qc_metadata   = 'Original QC'
+   /
+
+
+&location_nml
+   horiz_dist_only             = .true.
+   approximate_distance        = .false.
+   /
+
+
+&utilities_nml
+   TERMLEVEL = 2
+   module_details = .false.
+   logfilename = 'dart_log.out'
+   nmlfilename = 'dart_log.nml'
+   write_nml   = 'file'
+   /
+
+
+&obs_def_tower_nml
+   /
+
+&mpi_utilities_nml
+   /
+
+&state_vector_io_nml
+   /
+
+&ensemble_manager_nml
+   /
+
+&cov_cutoff_nml
+   /
+

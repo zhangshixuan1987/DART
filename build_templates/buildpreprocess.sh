@@ -13,17 +13,16 @@
 #-------------------------
 function dartversion() {
 
-local git_version
+    local git_version
 
-if command -v git >/dev/null 2>&1 && [ -e "$DART/.git" ]; then
-    git_version=$(cd "$DART" && git describe --tags --dirty --always 2>/dev/null || echo "version_unknown")
-else
-    git_version="version_unknown"
-fi
+    if command -v git >/dev/null 2>&1 && [ -e "$DART/.git" ]; then
+        git_version=$(cd "$DART" && git describe --tags --dirty --always 2>/dev/null || echo "version_unknown")
+    else
+        git_version="version_unknown"
+    fi
 
-# preprocessor definition for DART version
-version_def="-DDART_VERSION=\"'$git_version'\""
-
+    # preprocessor definition for DART version
+    version_def="-DDART_VERSION=\"\\\"${git_version}\\\"\""
 }
 
 function buildpreprocess() {
