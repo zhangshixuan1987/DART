@@ -637,8 +637,8 @@
 &perturb_single_instance_nml
    ens_size               = 3
    input_files            = 'eaminput.nc'
-   output_files           = 'eam_pert1.nc','eam_pert2.nc','eam_pert3.nc'
-   output_file_list       = ''
+   output_files           = ''
+   output_file_list       = 'eam_init_files'
    perturbation_amplitude = 0.1
    /
 
