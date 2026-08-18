@@ -67,12 +67,16 @@
    obs_sequence_in_name     = 'obs_seq.out'
    obs_sequence_out_name    = 'obs_seq.final'
    num_output_obs_members   = 3
-   compute_posterior        = .false.
-
+    
    trace_execution          = .true.
    output_timestamps        = .true.
    output_forward_op_errors = .false.
    silence                  = .false.
+
+   compute_posterior        = .false.
+   output_sequential_prior_post = .true.
+   use_sequential_prior_post = .false.
+
    /
 ! Moha's enhanced (gamma distribution) adaptive:
 !    inf_flavor                  = 5,                       0
@@ -575,6 +579,11 @@
    verbose               = .false.
    /
 
+&strongly_coupled_localization_nml
+	strongly_coupled = .false.
+	state_model = 'Atmosphere'
+	obs_model = 'Land'
+   /
 
 &schedule_nml
    calendar             = 'Gregorian'
