@@ -67,7 +67,6 @@
    obs_sequence_in_name     = 'obs_seq.out'
    obs_sequence_out_name    = 'obs_seq.final'
    num_output_obs_members   = 3
-   compute_posterior        = .false.
 
    trace_execution          = .true.
    output_timestamps        = .true.
