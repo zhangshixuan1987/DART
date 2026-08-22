@@ -1,0 +1,6 @@
+
+&elm_to_dart_nml
+   elm_restart_file  = 'elm_restart.nc'
+   verbose           = 0
+   /
+
