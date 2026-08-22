@@ -187,6 +187,8 @@
                                 'TOWER_SENSIBLE_HEAT_FLUX',
                                 'MODIS_SNOWCOVER_FRAC',
                                 'MODIS_LEAF_AREA_INDEX',
+                                'SMAP_A_SOIL_MOISTURE',
+                                'MODIS_LEAF_AREA_INDEX',
                                 'MODIS_FPAR',
                                 'BIOMASS',
                                 'OCO2_SIF'
