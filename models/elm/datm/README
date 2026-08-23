@@ -1,55 +1,88 @@
-# DART software - Copyright UCAR. This open source software is provided
-# by UCAR, "as is", without charge, subject to all terms of use at
-# http://www.image.ucar.edu/DAReS/DART/DART_download
-#
-# DART $Id$
+ELM-DART DATM forcing for E3SMv3
+==================================
 
-The coupler history files produced by the CAM assimilation are 
-HPSS:/RAEDER/DAI/POP_force/POP15/obs_####/H_cplr.ha2x1d.gz.tar 
+This directory documents atmospheric forcing for ELM cases that use the E3SM
+data atmosphere component (DATM). The configuration was checked against:
 
-bluefire:/ptmp/raeder/POP_force/doy_table_1997-2010 is required to
-decode the #### in the file names. Here is the synopsis.
+  E3SM source: /qfs/people/zhan391/e3sm_dart_work/code/E3SMv3
+  branch:      v3_dart_cda
+  revision:    1eda4d4dcacd9ff603764264d5bf8ca861b97ac1
+  version:     v3.0.2-96-g1eda4d4dca
 
-1998   1/ 1,  1/16,  1/31:   32 -  47 -  62
-1999   1/ 1,  1/16,  1/31:  397 - 412 - 427
-2000   1/ 1,  1/16,  1/31:  762 - 777 - 792
-2001   1/ 1,  1/16,  1/31:  1128 - 1143 - 1158
-2002   1/ 1,  1/16,  1/31:  1493 - 1508 - 1523
-2003   1/ 1,  1/16,  1/31:  1858 - 1873 - 1888
-2004   1/ 1,  1/16,  1/31:  2223 - 2238 - 2253
-2005   1/ 1,  1/16,  1/31:  2589 - 2604 - 2619
-2006   1/ 1,  1/16,  1/31:  2954 - 2969 - 2984
-2007   1/ 1,  1/16,  1/31:  3319 - 3334 - 3349
-2008   1/ 1,  1/16,  1/31:  3684 - 3699 - 3714
-2009   1/ 1,  1/16,  1/31:  4050 - 4065 - 4080
-2010   1/ 1,  1/16,  1/31:  4415 - 4430 - 4445
+Model roles
+-----------
 
-tar -x -f H_cplr.ha2x1d.gz.tar
-tar -x -f H_cplr.ha2x1dx6h.gz.tar
-gunzip CAM_halo-O2-POP15-E#.cpl.ha2x1dx6h.YYYY-MM-DD.nc.gz
-  E#   = ensemble member
-  YYYY = year
-  MM   = month
-  DD   = day
+EAM is the active E3SM atmosphere model. DATM is the data atmosphere used to
+force an ELM-only case. Thus, EAM or atmospheric-reanalysis output is the
+source, DATM is the forcing component, and ELM is the consumer.
 
-These have all the forcing fields written out from CAM, but since
-each one resulted from a cold-start of CAM, they all have the
-same time array ...  time = 0.25, 0.5, 0.75, 1 ; which (surprisingly)
-has no "units" metadata.
+Recommended E3SM configuration
+------------------------------
 
-Ultimately, we want to repackage these into annual files (about 1.8Gb),
-one per ensemble member. This requires us to overwrite the existing 
-time information such that the time variable in each file has the same
-units, i.e.,   time:units = "days since ${year}-01-01 00:00:00" ;
+E3SMv3 provides native CPLHIST support. Configure it from the case directory:
 
-While we're at it, I'm also including a 'time_bnds' array that defines
-the start and stop of the averaging period.
+  ./xmlchange DATM_MODE=CPLHIST
+  ./xmlchange DATM_CPLHIST_DIR=/absolute/path/to/coupler/history
+  ./xmlchange DATM_CPLHIST_CASE=CASE_PREFIX
+  ./xmlchange DATM_CPLHIST_YR_ALIGN=START_YEAR
+  ./xmlchange DATM_CPLHIST_YR_START=START_YEAR
+  ./xmlchange DATM_CPLHIST_YR_END=END_YEAR
+  ./xmlchange DATM_CPLHIST_DOMAIN_FILE=null
 
-GetCPLHISTdata.lsf      ... acquires and unpacks the data from the HPSS
-Process6hrlyCPLHIST.csh ... corrects the time array data/metadata and packages into a month
-AppendMonths.csh        ... packs all the days for a month into one annual file
+With DATM_CPLHIST_DOMAIN_FILE=null, E3SM reads domain information from the
+first coupler-history stream file. The forcing grid should match the ELM grid;
+otherwise an explicit domain and remapping strategy are required.
 
-# <next few lines under version control, do not edit>
-# $URL$
-# $Revision$
-# $Date$
+Native CPLHIST file contract
+----------------------------
+
+The E3SMv3 defaults expect monthly files named:
+
+  CASE_PREFIX.cpl.ha2x3h.YYYY-MM.nc
+
+The same files supply four streams:
+
+  CPLHISTForcing.Solar
+    a2x3h_Faxa_swndr, a2x3h_Faxa_swvdr,
+    a2x3h_Faxa_swndf, a2x3h_Faxa_swvdf
+
+  CPLHISTForcing.nonSolarFlux
+    a2x3h_Faxa_rainc, a2x3h_Faxa_rainl,
+    a2x3h_Faxa_snowc, a2x3h_Faxa_snowl, a2x3h_Faxa_lwdn
+
+  CPLHISTForcing.State3hr
+    a2x3h_Sa_z, a2x3h_Sa_tbot, a2x3h_Sa_ptem, a2x3h_Sa_shum,
+    a2x3h_Sa_pbot, a2x3h_Sa_dens, a2x3h_Sa_pslv,
+    a2x3h_Sa_co2diag, a2x3h_Sa_co2prog
+
+  CPLHISTForcing.State1hr
+    a2x3h_Sa_u, a2x3h_Sa_v
+
+Despite the historical State1hr stream name, the E3SMv3 default mapping uses
+a2x3h wind variables. Solar and flux streams use nearest-time selection;
+state streams use linear interpolation. E3SMv3 applies offsets of 2700 seconds
+to Solar and 900 seconds to the other three streams.
+
+Before case.setup
+-----------------
+
+Confirm that every monthly file:
+
+* has time units and a calendar consistent with the ELM case;
+* has monotonic time coordinates with no missing intervals;
+* contains lon, lat, area, and mask when the domain file is null;
+* contains all required a2x3h variables;
+* has no NaNs or physically invalid downward radiation/precipitation; and
+* uses the same horizontal grid for all four logical streams.
+
+No lnd_import_export SourceMod is required for DATM. Invalid negative forcing
+should be corrected in the forcing files rather than by replacing ELM coupling
+code.
+
+Legacy archive utilities
+------------------------
+
+legacy_cam/ contains the pre-E3SM scripts for retrieving and repackaging the
+1997-2010 CAM/POP coupler-history archive. They produce six-hourly ha2x1dx6h
+files and do not satisfy the native E3SMv3 CPLHIST contract without custom
+stream definitions. They are retained only for reproducibility.

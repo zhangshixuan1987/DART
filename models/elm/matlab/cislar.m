@@ -8,24 +8,25 @@ function cislar(timeindex)
 %
 % DART $Id$
 
-priorfname = '/glade/user/thoar/CLM_leafc/preassim.nc';
-postefname = '/glade/user/thoar/CLM_leafc/analysis.nc';
+priorfname = 'preassim.nc';
+postefname = 'analysis.nc';
 varname    = 'leafc';
 levelindex = 1;
-timeindex  = 6;
-copystring = 'ensemble mean';
-prior      = clm_get_var(priorfname,varname,copystring,levelindex,timeindex);
-poste      = clm_get_var(postefname,varname,copystring,levelindex,timeindex);
+if nargin < 1
+   timeindex = 1;
+end
+prior      = elm_get_var(priorfname,varname,levelindex,timeindex);
+poste      = elm_get_var(postefname,varname,levelindex,timeindex);
 
 innov        = prior;
 innov.datmat = poste.datmat - prior.datmat;
 
 % figure(1); clf
-% clm_var_plot(prior);
+% elm_plot_var(prior);
 % title('Prior')
 
 % figure(3); clf
-% clm_var_plot(innov);
+% elm_plot_var(innov);
 % title('Innovations')
 
 figure(2); clf
@@ -36,7 +37,7 @@ y = myplot(poste);
 
 function h3 = myplot(x)
 
-   h1 = imagesc(x.lon, x.lat, x.datmat);
+   h1 = imagesc(x.lonarray, x.latarray, x.datmat);
    set(h1,'AlphaData',~isnan(x.datmat))
    set(gca,'YDir','normal')
    set(gca,'FontSize',12,'FontWeight','bold')
@@ -48,9 +49,9 @@ function h3 = myplot(x)
    kids = get(h3,'YLabel');
    get(kids)
    set(kids,'String','Carbon (g/m^2)','Interpreter','TeX','FontSize',12)
-   cbarpos = get(h3,'Position') 
+   cbarpos = get(h3,'Position')
    cbarpos(4) = cbarpos(4) - 0.1;
-   cbarpos(2) = cbarpos(2) + 0.05 
+   cbarpos(2) = cbarpos(2) + 0.05
    set(gca,'XTick',[0:60:360])
    set(gca,'YTick',[-90:30:90])
    hx = xlabel('Longitude (degrees East)');
