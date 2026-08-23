@@ -107,19 +107,8 @@ export my_refcpl_in="${my_refdir}/${my_refcase}.cpl.r.${my_refdate}-${my_reftod}
 ################################################################################
 export my_e3sm_completed_cycles=0
 export my_e3sm_cycle_hours=6
-export my_raw_archive_layout="per_member"
-export my_shared_archive_dir="${my_modeldir}/archive"
+# Fixed workflow invariant; all archive readers and writers use ENxx/archive.
 export my_dart_root="${my_modeldir}/dart_en$(printf '%02d' "${my_ensnum}")"
-my_member_archive_dir() {
-  local member="${1:-}"
-  [[ "${member}" =~ ^EN[0-9][0-9]$ ]] || { echo "invalid ensemble member: ${member:-unset}" >&2; return 1; }
-  case "${my_raw_archive_layout}" in
-    shared) printf '%s\n' "${my_shared_archive_dir}" ;;
-    per_member) printf '%s\n' "${my_modeldir}/${member}/archive" ;;
-    *) echo "invalid my_raw_archive_layout: ${my_raw_archive_layout}" >&2; return 1 ;;
-  esac
-}
-export -f my_member_archive_dir
 export my_e3sm_start_date=${my_casedate}
 export my_e3sm_start_tod=${my_casetod}
 export my_e3sm_end_date="2012-01-04"
@@ -150,33 +139,6 @@ export my_eam_dart_obsdir="/compyfs/zhan391/acme_init/Observations/NCEP+ACARS+GP
 declare -Ag my_eam_cycle_overrides=(
 )
 
-validate_my_eam_cycle_overrides() {
-  local key stamp parameter value ymd tod
-  for key in "${!my_eam_cycle_overrides[@]}"; do
-    if [[ ! "${key}" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{5}):(localization_cutoff|inflation_damping|no_obs_assim_above_level)$ ]]; then
-      echo "invalid my_eam_cycle_overrides key: ${key}" >&2
-      return 1
-    fi
-    stamp=${BASH_REMATCH[1]}
-    parameter=${BASH_REMATCH[2]}
-    ymd=${stamp:0:10}
-    tod=${stamp:11:5}
-    date -d "${ymd}" +%F >/dev/null 2>&1 || { echo "invalid override date: ${key}" >&2; return 1; }
-    (( 10#${tod} < 86400 )) || { echo "override time is outside 00000-86399: ${key}" >&2; return 1; }
-    value=${my_eam_cycle_overrides[${key}]}
-    case "${parameter}" in
-      localization_cutoff)
-        [[ "${value}" =~ ^[0-9]+([.][0-9]+)?$ ]] && awk -v v="${value}" 'BEGIN {exit !(v > 0)}' || { echo "invalid localization cutoff for ${stamp}: ${value}" >&2; return 1; }
-        ;;
-      inflation_damping)
-        [[ "${value}" =~ ^[0-9]+([.][0-9]+)?$ ]] && awk -v v="${value}" 'BEGIN {exit !(v >= 0 && v <= 1)}' || { echo "invalid inflation damping for ${stamp}: ${value}" >&2; return 1; }
-        ;;
-      no_obs_assim_above_level)
-        [[ "${value}" =~ ^[1-9][0-9]*$ ]] && (( value <= 72 )) || { echo "invalid model-top cutoff level for ${stamp}: ${value}" >&2; return 1; }
-        ;;
-    esac
-  done
-}
 
 
 
@@ -185,7 +147,7 @@ validate_my_eam_cycle_overrides() {
 # ELM DA links single-record h1 history and h2 vector files from each member archive.
 ################################################################################
 export my_elm_dart_da="on"
-export my_elm_dart_cycle_hours=24
+export my_elm_dart_cycle_hours=6
 export my_elm_dart_end_date="${my_e3sm_end_date}"
 export my_elm_dart_end_tod="${my_e3sm_end_tod}"
 export my_elm_dart_run_dir="${my_dart_root}/elm"

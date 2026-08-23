@@ -167,6 +167,7 @@ for i in `seq 1 $my_ensnum`;do
   SUB_CASE_DIR=${CASE_ROOT}/${my_enscase}/case_scripts
   SUB_BUILD_DIR=${CASE_ROOT}/${my_enscase}/build
   SUB_RUN_DIR=${CASE_ROOT}/${my_enscase}/run
+  SUB_ARCHIVE_DIR=${CASE_ROOT}/${my_enscase}/archive
   SUB_REFDIR=${RUN_REFDIR}
   if [ -d "${SUB_CASE_DIR}" ]; then
      safe_remove_case_dir "${SUB_CASE_DIR}"
@@ -177,6 +178,7 @@ for i in `seq 1 $my_ensnum`;do
   sed -i "s#CASE_SCRIPTS_DIR=.*#CASE_SCRIPTS_DIR=\"${SUB_CASE_DIR}\"#"   ${run_script}
   sed -i "s#CASE_BUILD_DIR=.*#CASE_BUILD_DIR=\"${SUB_BUILD_DIR}\"#"      ${run_script}
   sed -i "s#CASE_RUN_DIR=.*#CASE_RUN_DIR=\"${SUB_RUN_DIR}\"#"            ${run_script}
+  sed -i "s#CASE_ARCHIVE_DIR=.*#CASE_ARCHIVE_DIR=\"${SUB_ARCHIVE_DIR}\"#" ${run_script}
   sed -i "s#old_modelexe#\"${my_modelexe}\"#"                            ${run_script}
   echo $run_script
   ./${run_script}

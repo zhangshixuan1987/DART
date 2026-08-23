@@ -77,7 +77,7 @@ SPACE_MARGIN_MB="${COMPRESS_SPACE_MARGIN_MB:-1024}"
 [[ "${COMPRESS_HISTORY}" == "TRUE" || "${COMPRESS_RESTARTS}" == "TRUE" ]] || fail "both compression modes are disabled"
 
 [[ "${COMPRESS_ENSTR:-}" =~ ^EN[0-9][0-9]$ ]] || fail "COMPRESS_ENSTR must identify one ensemble member"
-ARCHIVE_DIR=$(my_member_archive_dir "${COMPRESS_ENSTR}") || fail "cannot resolve archive for ${COMPRESS_ENSTR}"
+ARCHIVE_DIR="${my_modeldir}/${COMPRESS_ENSTR}/archive"
 STATUS_DIR="${my_status_dir}"
 TIMESTAMP_DASH="${ZIP_DATE}-${ZIP_TOD}"
 TIMESTAMP_UNDER="${ZIP_DATE}_${ZIP_TOD}"

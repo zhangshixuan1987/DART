@@ -322,7 +322,7 @@ if [[ ${my_eam_dart_diag_run_closest_member}  == '.true.' ]];then
         echo === Starting member ${i} ===
         ENSTR=EN`printf "%02d" ${i}`
         CASE_NAME=${my_casename}.${ENSTR}
-        ARC_DIR="$(my_member_archive_dir "${ENSTR}")/rest/${my_dartdate}-${my_darttod}"
+        ARC_DIR="${my_modeldir}/${ENSTR}/archive/rest/${my_dartdate}-${my_darttod}"
         ${LIST} ${ARC_DIR}/${CASE_NAME}.*eam.i*${my_dartdate}-${my_darttod}.nc >> ${input_restart_file_list}
         if [ $i == 1 ]; then
           if [ -f ${EAMINPUT} ]; then

@@ -572,7 +572,7 @@ preflight_cycle_inputs() {
   for i in $(seq 1 "${my_ensnum}"); do
     enstr=$(printf "EN%02d" "${i}")
     case_name="${my_casename}.${enstr}"
-    ref_dir="$(my_member_archive_dir "${enstr}")/rest/${CUR_YMD}-${CUR_TOD}"
+    ref_dir="${my_modeldir}/${enstr}/archive/rest/${CUR_YMD}-${CUR_TOD}"
     run_dir="${RUN_ROOT/EN01/${enstr}}"
     required_files=(
       "${ref_dir}/${case_name}.eam.i.${CUR_YMD}-${CUR_TOD}.nc"
@@ -616,7 +616,7 @@ prepare_member() (
   CASE_NAME="${my_casename}.${ENSTR}"
   CASE_DIR="${CASE_ROOT/EN01/${ENSTR}}"
   RUN_DIR="${RUN_ROOT/EN01/${ENSTR}}"
-  MEMBER_ARCHIVE_DIR=$(my_member_archive_dir "${ENSTR}") || fail "could not resolve archive for ${ENSTR}"
+  MEMBER_ARCHIVE_DIR="${my_modeldir}/${ENSTR}/archive"
   REF_DIR="${MEMBER_ARCHIVE_DIR}/rest/${CUR_YMD}-${CUR_TOD}"
   echo "Preparing ${ENSTR}"
 
@@ -712,7 +712,7 @@ capture_member_failure_diagnostics() {
   local run_dir="$3"
   local diagnostic_log latest_e3sm_log member_archive
 
-  member_archive=$(my_member_archive_dir "${enstr}") || fail "could not resolve archive for ${enstr}"
+  member_archive="${my_modeldir}/${enstr}/archive"
   diagnostic_log="${LOG_DIR}/failure.${enstr}.${SLURM_JOB_ID:-$$}.cycle${DATA_ASSIMILATION_CYCLES}.log"
   latest_e3sm_log=$(find "${run_dir}" -maxdepth 1 -type f -name 'e3sm.log.*' -printf '%T@ %p\n' 2>/dev/null |
     sort -nr | awk 'NR == 1 {$1=""; sub(/^ /, ""); print; exit}')
@@ -771,7 +771,7 @@ members_to_run=()
 for i in $(seq 1 "${my_ensnum}"); do
   ENSTR=$(printf "EN%02d" "${i}")
   CASE_NAME="${my_casename}.${ENSTR}"
-  MEMBER_ARCHIVE_DIR=$(my_member_archive_dir "${ENSTR}") || fail "could not resolve archive for ${ENSTR}"
+  MEMBER_ARCHIVE_DIR="${my_modeldir}/${ENSTR}/archive"
   FORECAST_TARGET_FILE="${MEMBER_ARCHIVE_DIR}/rest/${DA_TARGET_YMD}-${DA_TARGET_TOD}/${CASE_NAME}.eam.i.${DA_TARGET_YMD}-${DA_TARGET_TOD}.nc"
   RUN_DIR="${RUN_ROOT/EN01/${ENSTR}}"
   if [[ "${SKIP_COMPLETED_MEMBERS}" == "TRUE" ]] && is_valid_da_eam_file "${FORECAST_TARGET_FILE}"; then
@@ -877,7 +877,7 @@ for i in `seq 1 $my_ensnum`;do
   CASE_NAME=${my_casename}.${ENSTR}
   CASE_DIR=`echo ${CASE_ROOT} | sed "s/EN01/${ENSTR}/g"`
   RUN_DIR=`echo ${RUN_ROOT} | sed "s/EN01/${ENSTR}/g"`
-  DA_REF_DIR="$(my_member_archive_dir "${ENSTR}")/rest/${DA_TARGET_YMD}-${DA_TARGET_TOD}"
+  DA_REF_DIR="${my_modeldir}/${ENSTR}/archive/rest/${DA_TARGET_YMD}-${DA_TARGET_TOD}"
   atm_in="${DA_REF_DIR}/${CASE_NAME}.eam.i.${TMP_DATE}-${TMP_TOD}.nc"
   atm_in1="${RUN_DIR}/${CASE_NAME}.eam.i.${TMP_DATE}-${TMP_TOD}.nc"
 
@@ -920,7 +920,7 @@ for i in `seq 1 $my_ensnum`;do
   CASE_NAME=${my_casename}.${ENSTR}
   CASE_DIR=`echo ${CASE_ROOT} | sed "s/EN01/${ENSTR}/g"`
   RUN_DIR=`echo ${RUN_ROOT} | sed "s/EN01/${ENSTR}/g"`
-  DA_REF_DIR="$(my_member_archive_dir "${ENSTR}")/rest/${DA_TARGET_YMD}-${DA_TARGET_TOD}"
+  DA_REF_DIR="${my_modeldir}/${ENSTR}/archive/rest/${DA_TARGET_YMD}-${DA_TARGET_TOD}"
   atm_in="${DA_REF_DIR}/${CASE_NAME}.eam.i.${TMP_DATE}-${TMP_TOD}.nc"
   atm_in1="${RUN_DIR}/${CASE_NAME}.eam.i.${TMP_DATE}-${TMP_TOD}.nc"
 
