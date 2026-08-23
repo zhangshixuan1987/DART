@@ -260,8 +260,9 @@ real(r8) :: inf_sd_lower_bound(2)          = 0.0_r8
 ! Some models are allowed to have MISSING_R8 values in the DART state vector.
 ! If they are encountered, it is not necessarily a FATAL error.
 ! Most of the time, if a MISSING_R8 is encountered, DART should die.
-! CLM should have allow_missing_clm = .true.
+! CLM may set allow_missing_clm; ELM may set allow_missing_elm. Either enables this behavior.
 logical  :: allow_missing_clm = .false.
+logical  :: allow_missing_elm = .false. ! Backward-compatible ELM-specific alias
 
 
 namelist /filter_nml/ async,     &
@@ -314,7 +315,8 @@ namelist /filter_nml/ async,     &
    output_sd,                    &
    write_all_stages_at_end,      &
    write_obs_every_cycle,        & 
-   allow_missing_clm
+   allow_missing_clm,            &
+   allow_missing_elm
 
 !----------------------------------------------------------------
 
@@ -394,7 +396,7 @@ endif
 write(msgstring, '(A,I5)') 'running with an ensemble size of ', ens_size
 call error_handler(E_MSG,'filter_main:', msgstring, source)
 
-call set_missing_ok_status(allow_missing_clm)
+call set_missing_ok_status(allow_missing_clm .or. allow_missing_elm)
 allow_missing = get_missing_ok_status()
 
 call trace_message('Before initializing inflation')
