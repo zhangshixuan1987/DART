@@ -1,6 +1,11 @@
-
 ELM-DART Tutorial 
 ==================
+
+.. warning::
+
+   This tutorial still describes the removed CESM2/CLM workflow and must not be
+   used to configure E3SMv3. Use ``shell_scripts/e3sm_maint_3.0/README.md`` for
+   the maintained E3SM EAM/ELM workflow until this tutorial is ported.
 
 
 Introduction
@@ -1534,7 +1539,7 @@ documentation found :doc:`here. <../../../guide/matlab-observation-space>`
 .. Note::
    
  Additional scripts that are designed for ELM output visualization
- can be found here (``DART/models/elm/matlab``).  The ``clm_get_var.m`` and ``clm_plot_var.m``
+ can be found here (``DART/models/elm/matlab``).  The ``elm_get_var.m`` and ``elm_plot_var.m``
  scripts are designed to re-constitute a vector-based file (e.g. restart.nc) into 
  gridded averages to allow viewing of spatial maps.  These scripts are helpful to
  view the model update by DART (innovations). An example of how to implement these

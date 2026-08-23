@@ -1,0 +1,8 @@
+ELM SourceMods for E3SM maint-3.0
+==================================
+
+CIME passes this directory directly to the ELM build with `-usr_src`. Keep all
+Fortran overrides directly in `src.elm`; do not reproduce directories from
+`components/elm/src` below this level.
+
+See `../README.txt` for compatibility, modifications, and installation details.

@@ -37,13 +37,13 @@
 # The actual model settings are inconsequential.
 
 &model_nml
-   clm_restart_filename         = 'clm_dart.clm2.r.2013-07-02-00000.nc'
-   clm_history_filename         = 'clm_dart.clm2.h0.2013-07-02-00000.nc'
+   elm_restart_filename         = 'elm_dart.elm.r.2013-07-02-00000.nc'
+   elm_history_filename         = 'elm_dart.elm.h0.2013-07-02-00000.nc'
    assimilation_period_days     = 2
    assimilation_period_seconds  = 3600
    calendar                     = 'gregorian'
    debug                        = 0
-   clm_variables =
+   elm_variables =
        'frac_sno',    'QTY_SNOWCOVER_FRAC',   '0.0', 'NA', 'restart', 'NO_COPY_BACK'
        'EFLX_LH_TOT', 'QTY_LATENT_HEAT_FLUX', 'NA',  'NA', 'history', 'NO_COPY_BACK'
    /
