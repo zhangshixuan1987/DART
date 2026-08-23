@@ -418,12 +418,16 @@ nc_file_ID = nc_open_file_readonly(eam_template_filename, 'Reading ne and np fro
 call nc_get_global_attribute(nc_file_ID, 'ne', ne, 'Reading ne from eam template file', eam_template_filename)
 call nc_get_global_attribute(nc_file_ID, 'np', np, 'Reading np from eam template file', eam_template_filename)
 
-if (print_details .and. eam_use_pgrid) then 
+if (eam_use_pgrid) then
   call nc_get_global_attribute(nc_file_ID, 'fv_nphys', fv_nphys, 'Reading fv_nphys from eam template file', eam_template_filename)
-  call nc_close_file(nc_file_ID, 'Reading ne and np from eam template file', eam_template_filename)
+endif
+
+call nc_close_file(nc_file_ID, 'Reading ne, np, and fv_nphys from eam template file', eam_template_filename)
+
+if (print_details .and. eam_use_pgrid) then
   write(string1, *) 'Cubed sphere grid is configured with fv_nphys =', fv_nphys
   call error_handler(E_MSG, 'static_init_model', string1,source,revision,revdate)
-end if 
+endif
 
 ! Calculate the nominal resolution of the (coarse) grid,
 ! for use by model_interpolate's call to get_close_obs.

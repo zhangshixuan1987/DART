@@ -8,7 +8,7 @@
 #SBATCH --partition=slurm
 #SBATCH --job-name=e3sm_dart_ensda_cyc
 #SBATCH --nodes=160
-#SBATCH --output=e3sm_dart_ensda_cyc.%j
+#SBATCH --output=runtmp/logs/e3sm_dart_ensda_cyc.%j
 #SBATCH --exclusive
 #SBATCH --no-kill
 #SBATCH --requeue
@@ -18,6 +18,34 @@ set -Eeuo pipefail
 fail() {
   echo "ERROR: $*" >&2
   exit 1
+}
+
+validate_my_eam_cycle_overrides() {
+  local key stamp parameter value ymd tod
+  for key in "${!my_eam_cycle_overrides[@]}"; do
+    if [[ ! "${key}" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{5}):(localization_cutoff|inflation_damping|no_obs_assim_above_level)$ ]]; then
+      echo "invalid my_eam_cycle_overrides key: ${key}" >&2
+      return 1
+    fi
+    stamp=${BASH_REMATCH[1]}
+    parameter=${BASH_REMATCH[2]}
+    ymd=${stamp:0:10}
+    tod=${stamp:11:5}
+    date -d "${ymd}" +%F >/dev/null 2>&1 || { echo "invalid override date: ${key}" >&2; return 1; }
+    (( 10#${tod} < 86400 )) || { echo "override time is outside 00000-86399: ${key}" >&2; return 1; }
+    value=${my_eam_cycle_overrides[${key}]}
+    case "${parameter}" in
+      localization_cutoff)
+        [[ "${value}" =~ ^[0-9]+([.][0-9]+)?$ ]] && awk -v v="${value}" 'BEGIN {exit !(v > 0)}' || { echo "invalid localization cutoff for ${stamp}: ${value}" >&2; return 1; }
+        ;;
+      inflation_damping)
+        [[ "${value}" =~ ^[0-9]+([.][0-9]+)?$ ]] && awk -v v="${value}" 'BEGIN {exit !(v >= 0 && v <= 1)}' || { echo "invalid inflation damping for ${stamp}: ${value}" >&2; return 1; }
+        ;;
+      no_obs_assim_above_level)
+        [[ "${value}" =~ ^[1-9][0-9]*$ ]] && (( value <= 72 )) || { echo "invalid model-top cutoff level for ${stamp}: ${value}" >&2; return 1; }
+        ;;
+    esac
+  done
 }
 
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
@@ -52,7 +80,7 @@ validate_marker() {
   actual_size=$(marker_field "${marker}" ensemble_size) || fail "completion record lacks ensemble_size: ${marker}"
   actual_layout=$(marker_field "${marker}" archive_layout) || fail "completion record lacks archive_layout: ${marker}; rerun the upstream step"
   actual_dart_root=$(marker_field "${marker}" dart_root) || fail "completion record lacks dart_root: ${marker}; rerun the upstream step"
-  [[ "${actual_time}" == "${expected_time}" && "${actual_case}" == "${expected_case}" && "${actual_size}" == "${expected_size}" && "${actual_layout}" == "${my_raw_archive_layout}" && "${actual_dart_root}" == "${my_dart_root}" ]] || fail "upstream completion record does not match configured time, case, ensemble size, archive layout, or DART root: ${marker}"
+  [[ "${actual_time}" == "${expected_time}" && "${actual_case}" == "${expected_case}" && "${actual_size}" == "${expected_size}" && "${actual_layout}" == "per_member" && "${actual_dart_root}" == "${my_dart_root}" ]] || fail "upstream completion record does not match configured time, case, ensemble size, archive layout, or DART root: ${marker}"
 }
 validate_marker "${my_status_dir}/perturb_complete.${my_refdate}-${my_reftod}" "${my_refdate}-${my_reftod}" "${my_casename}" "${my_ensnum}"
 validate_positive_int() {
@@ -106,7 +134,7 @@ validate_runtime_state() {
   # live case clocks agree. A uniformly newer clock is an intentional rollback.
   for ((member=1; member<=my_ensnum; member++)); do
     member_name=$(printf 'EN%02d' "${member}")
-    member_archive=$(my_member_archive_dir "${member_name}") || fail "could not resolve archive for ${member_name}"
+    member_archive="${my_modeldir}/${member_name}/archive"
     [[ -d "${member_archive}/rest/${expected}" ]] || fail "missing restart archive for ${member_name} at configured state: ${member_archive}/rest/${expected}"
     case_dir="${my_modeldir}/${member_name}/case_scripts"
     [[ -x "${case_dir}/xmlquery" ]] || fail "missing xmlquery: ${case_dir}/xmlquery"
@@ -141,7 +169,7 @@ validate_runtime_state() {
       # Validate every component input before creating missing rollback metadata.
       for ((member=1; member<=my_ensnum; member++)); do
         member_name=$(printf 'EN%02d' "${member}")
-        member_archive=$(my_member_archive_dir "${member_name}") || fail "could not resolve archive for ${member_name}"
+        member_archive="${my_modeldir}/${member_name}/archive"
         case_name="${my_casename}.${member_name}"
         required_files=(
           "${member_archive}/rest/${expected}/${case_name}.eam.i.${expected}.nc"
@@ -160,7 +188,7 @@ validate_runtime_state() {
       if [[ ! -s "${marker}" ]]; then
         marker_tmp="${marker}.tmp.${SLURM_JOB_ID:-$$}"
         printf 'cycle=%s\nvalid_time=%s\ncase=%s\nensemble_size=%s\narchive_layout=%s\ndart_root=%s\nslurm_job_id=reconstructed\ncompleted_at=unknown\nreconstructed_at=%s\nreconstruction_reason=verified_counter_rollback_from_%s\n' \
-          "${my_e3sm_completed_cycles}" "${expected}" "${my_casename}" "${my_ensnum}" "${my_raw_archive_layout}" "${my_dart_root}" "$(date '+%Y-%m-%d %H:%M:%S')" "${common_actual}" > "${marker_tmp}" || fail "could not write reconstructed marker"
+          "${my_e3sm_completed_cycles}" "${expected}" "${my_casename}" "${my_ensnum}" "per_member" "${my_dart_root}" "$(date '+%Y-%m-%d %H:%M:%S')" "${common_actual}" > "${marker_tmp}" || fail "could not write reconstructed marker"
         mv -f "${marker_tmp}" "${marker}" || fail "could not commit reconstructed marker"
         echo "Reconstructed verified rollback marker: ${marker}"
       fi

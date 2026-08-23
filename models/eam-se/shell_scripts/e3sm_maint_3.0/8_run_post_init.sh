@@ -95,7 +95,7 @@ preflight_date() {
   for ((preflight_i=1; preflight_i<=my_ensnum; preflight_i++)); do
     member=$(printf 'EN%02d' "${preflight_i}")
     case_name="${my_casename}.${member}"
-    member_archive=$(my_member_archive_dir "${member}") || fail "cannot resolve archive for ${member}"
+    member_archive="${my_modeldir}/${member}/archive"
     restart_path="${member_archive}/rest/${stamp}"
     [[ -d "${restart_path}" ]] || fail "missing restart directory for ${member}: ${restart_path}"
     eam_in="${restart_path}/${case_name}.eam.i.${stamp}.nc"
@@ -140,7 +140,7 @@ process_member() {
   local stamp="$1" member="$2" case_name member_archive restart_path date_out
   local eam_in elm_in eam_out elm_out record progress tmp_record tmpdir
   case_name="${my_casename}.${member}"
-  member_archive=$(my_member_archive_dir "${member}") || return 1
+  member_archive="${my_modeldir}/${member}/archive"
   restart_path="${member_archive}/rest/${stamp}"
   date_out="${OUT_DIR}/${stamp}"
   eam_in="${restart_path}/${case_name}.eam.i.${stamp}.nc"

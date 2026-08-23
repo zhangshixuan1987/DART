@@ -290,8 +290,8 @@ cat << EOF >> user_nl_elm
  hist_fincl3 = 'NEE', 'TLAI', 'TWS', 'SMP', 'H2OSNO', 'RH2M_R', 'TV', 'PBOT', 'TBOT'
 
  hist_mfilt = 1,1,1
- hist_nhtfrq = 0,-24,-24
- hist_avgflag_pertape = 'A','A','A'
+ hist_nhtfrq = 0,-6,-6
+ hist_avgflag_pertape = 'A','I','I'
 
  check_finidat_year_consistency = .false.
  check_dynpft_consistency = .false.
