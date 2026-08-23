@@ -79,14 +79,14 @@ validate_marker() {
  actual_layout=$(marker_field "${marker}" archive_layout) || fail "completion record lacks archive_layout; rerun Step 2: ${marker}"
  actual_dart_root=$(marker_field "${marker}" dart_root) || fail "completion record lacks dart_root; rerun Step 2: ${marker}"
  [[ "${actual_time}" == "${expected_time}" && "${actual_case}" == "${expected_case}" && "${actual_size}" == "${expected_size}" ]] || fail "upstream completion record does not match time, case, or ensemble size: ${marker}"
- [[ "${actual_layout}" == "${my_raw_archive_layout}" ]] || fail "Step 2 archive layout mismatch: expected ${my_raw_archive_layout}, found ${actual_layout}"
+ [[ "${actual_layout}" == "per_member" ]] || fail "Step 2 archive layout mismatch: expected per_member, found ${actual_layout}"
  [[ "${actual_dart_root}" == "${my_dart_root}" ]] || fail "Step 2 DART root mismatch: expected ${my_dart_root}, found ${actual_dart_root}"
 }
 validate_marker "${my_status_dir}/icbc_complete.${my_refdate}-${my_reftod}" "${my_refdate}-${my_reftod}" "${my_casename}" "${my_ensnum}"
 PERTURB_MARKERS=()
 for i in $(seq 1 "${my_ensnum}"); do
    ENSTR=$(printf 'EN%02d' "${i}")
-   MEMBER_ARCHIVE_DIR=$(my_member_archive_dir "${ENSTR}") || fail "cannot resolve archive for ${ENSTR}"
+   MEMBER_ARCHIVE_DIR="${my_modeldir}/${ENSTR}/archive"
    member_marker="${MEMBER_ARCHIVE_DIR}/rest/${my_refdate}-${my_reftod}/.dart_perturb_in_progress"
    [[ ! -e "${member_marker}" ]] || fail "previous perturbation did not finish cleanly for ${ENSTR}; rerun Step 2: ${member_marker}"
    PERTURB_MARKERS+=("${member_marker}")
@@ -234,7 +234,7 @@ fi
 ATM_DATE_EXT=${START_DATE}-${START_TOD}
 member_eam_initial_file() {
   local enstr="$1" member_archive
-  member_archive=$(my_member_archive_dir "${enstr}") || return 1
+  member_archive="${my_modeldir}/${enstr}/archive"
   printf '%s/rest/%s-%s/%s.%s.eam.i.%s.nc\n' "${member_archive}" "${START_DATE}" "${START_TOD}" "${DART_CASE}" "${enstr}" "${ATM_DATE_EXT}"
 }
 validate_step3_input_ensemble() {
@@ -274,7 +274,7 @@ safe_reset_dart_workdir() {
 validate_step3_dependencies
 validate_step3_input_ensemble
 for member_marker in "${PERTURB_MARKERS[@]}"; do
-   printf 'valid_time=%s-%s\ncase=%s\nensemble_size=%s\narchive_layout=%s\ndart_root=%s\nslurm_job_id=%s\nstarted_at=%s\n' "${my_refdate}" "${my_reftod}" "${my_casename}" "${my_ensnum}" "${my_raw_archive_layout}" "${my_dart_root}" "${SLURM_JOB_ID:-none}" "$(date '+%Y-%m-%d %H:%M:%S')" > "${member_marker}"
+   printf 'valid_time=%s-%s\ncase=%s\nensemble_size=%s\narchive_layout=%s\ndart_root=%s\nslurm_job_id=%s\nstarted_at=%s\n' "${my_refdate}" "${my_reftod}" "${my_casename}" "${my_ensnum}" "per_member" "${my_dart_root}" "${SLURM_JOB_ID:-none}" "$(date '+%Y-%m-%d %H:%M:%S')" > "${member_marker}"
 done
 CURRENT_DADIR="${DART_RUNDIR}/${START_DATE}-${START_TOD}"
 safe_reset_dart_workdir "${CURRENT_DADIR}"
@@ -971,7 +971,7 @@ fi
 # Step 3 is complete only after filter output validation and all diagnostic
 # post-processing have succeeded.
 perturb_tmp="${perturb_status}.tmp.${SLURM_JOB_ID:-$$}"
-printf 'valid_time=%s-%s\ncase=%s\nensemble_size=%s\narchive_layout=%s\ndart_root=%s\nslurm_job_id=%s\ncompleted_at=%s\n' "${START_DATE}" "${START_TOD}" "${DART_CASE}" "${DART_ENSNUM}" "${my_raw_archive_layout}" "${my_dart_root}" "${SLURM_JOB_ID:-none}" "$(date '+%Y-%m-%d %H:%M:%S')" > "${perturb_tmp}"
+printf 'valid_time=%s-%s\ncase=%s\nensemble_size=%s\narchive_layout=%s\ndart_root=%s\nslurm_job_id=%s\ncompleted_at=%s\n' "${START_DATE}" "${START_TOD}" "${DART_CASE}" "${DART_ENSNUM}" "per_member" "${my_dart_root}" "${SLURM_JOB_ID:-none}" "$(date '+%Y-%m-%d %H:%M:%S')" > "${perturb_tmp}"
 mv -f "${perturb_tmp}" "${perturb_status}" || exit 44
 for member_marker in "${PERTURB_MARKERS[@]}"; do
    rm -f -- "${member_marker}" || exit 40

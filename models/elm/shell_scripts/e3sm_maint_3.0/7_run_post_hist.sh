@@ -120,7 +120,7 @@ product_worker() {
 
 validate_product_outputs() {
   local product="$1" member="$2" root pattern found=0 found_da=0 file member_archive
-  member_archive=$(my_member_archive_dir "${member}") || return 1
+  member_archive="${my_modeldir}/${member}/archive"
   case "${product}" in
     eam_6hourly) root="${member_archive}/post/atm/180x360_aave/ts/6hourly"; pattern="*.${member}.*.nc" ;;
     eam_daily) root="${member_archive}/post/atm/180x360_aave/ts/daily"; pattern="*.${member}.*.nc" ;;

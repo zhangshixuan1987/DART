@@ -28,7 +28,7 @@ ymde="${POST_END_DATE}"
 ENSTR="${POST_ENSTR}"
 CASE_NAME="${POST_CASE_NAME}"
 
-ARCHIVE_DIR=$(my_member_archive_dir "${POST_ENSTR}") || exit 20
+ARCHIVE_DIR="${my_modeldir}/${POST_ENSTR}/archive"
 ts_dest1="${ARCHIVE_DIR}/post/lnd/180x360_aave/ts/daily"
 
 outdir="${ARCHIVE_DIR}/post/lnd/180x360_aave/monthly"

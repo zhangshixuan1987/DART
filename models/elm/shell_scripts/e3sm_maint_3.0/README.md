@@ -21,6 +21,9 @@ The repository template enables both EAM and ELM analyses, leaves strongly
 coupled sequential-prior/posterior exchange off, resets the completed-cycle
 counter to zero, and attempts one cycle per allocation. Change these controls
 only in `create_and_setup_case.sh` after matching the restart and status state.
+All raw model output uses the fixed per-member layout `ENxx/archive`. The ELM
+`h1` and vector `h2` streams are written as six-hourly instantaneous records so
+each assimilation cycle can select and validate one exact-time record.
 
 ## Quick start
 
@@ -123,7 +126,9 @@ Runtime DART namelists are also workflow-owned. The explicit
 `workflow_lib/namelists/`. DART model `work/input.nml` files remain reserved for
 build-time utilities such as `preprocess`.
 
-Exceptional assimilation cycles can override localization cutoff and inflation damping in the `my_eam_dart_cycle_overrides` table. Unlisted cycles continue to use the ensemble-size defaults.
+Exceptional assimilation cycles can override localization cutoff, inflation
+damping, and `no_obs_assim_above_level` in the `my_eam_cycle_overrides` table.
+Step 4 validates the table before cycling; unlisted cycles use the defaults.
 
 The configuration defines these canonical workflow paths from the location of the sourced `create_and_setup_case.sh` file:
 

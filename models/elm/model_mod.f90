@@ -297,6 +297,7 @@ logical :: unstructured = .false.
 ! move to next latitude.
 
 integer :: ngridcell = -1 ! Number of gridcells containing land
+integer :: ntopounit = -1 ! Number of topographic units
 integer :: nlandunit = -1 ! Number of land units
 integer :: ncolumn   = -1 ! Number of columns
 integer :: npft      = -1 ! Number of plant functional types
@@ -308,10 +309,13 @@ integer :: nnumrad   = -1 ! Number of
 integer :: nlevcan   = -1 ! Number of canopy layers (*XY*)
 
 integer,  allocatable, dimension(:)  :: grid1d_ixy, grid1d_jxy ! 2D lon/lat index of corresponding gridcell
+integer,  allocatable, dimension(:)  :: topo1d_ixy, topo1d_jxy ! 2D lon/lat index of corresponding topounit
 integer,  allocatable, dimension(:)  :: land1d_ixy, land1d_jxy ! 2D lon/lat index of corresponding gridcell
 integer,  allocatable, dimension(:)  :: cols1d_ixy, cols1d_jxy ! 2D lon/lat index of corresponding gridcell
 integer,  allocatable, dimension(:)  :: pfts1d_ixy, pfts1d_jxy ! 2D lon/lat index of corresponding gridcell
+real(r8), allocatable, dimension(:)  :: topo1d_wtxy    ! topounit weight relative to corresponding gridcell
 real(r8), allocatable, dimension(:)  :: land1d_wtxy    ! landunit weight relative to corresponding gridcell
+integer,  allocatable, dimension(:)  :: land1d_topounit_index
 real(r8), allocatable, dimension(:)  :: cols1d_wtxy    ! column   weight relative to corresponding gridcell
 real(r8), allocatable, dimension(:)  :: pfts1d_wtxy    ! pft      weight relative to corresponding gridcell
 integer,  allocatable, dimension(:)  :: land1d_ityplun ! landunit type
@@ -521,6 +525,8 @@ ncid = 0; ! signal that netcdf file is closed
 ! only the grid cells that contain land are preserved.
 
 call get_sparse_dims(ncid, elm_restart_filename, 'open')
+allocate(topo1d_ixy(ntopounit), topo1d_jxy(ntopounit), topo1d_wtxy(ntopounit))
+allocate(land1d_topounit_index(nlandunit))
 
 allocate(grid1d_ixy(ngridcell), grid1d_jxy(ngridcell))
 allocate(land1d_ixy(nlandunit),     land1d_jxy(nlandunit),   land1d_wtxy(nlandunit))
@@ -654,7 +660,9 @@ endif
 
 deallocate(LAT, LON, LEVGRND, LEVSOI, LEVDCMP)
 deallocate(grid1d_ixy, grid1d_jxy)
+deallocate(topo1d_ixy, topo1d_jxy, topo1d_wtxy)
 deallocate(land1d_ixy, land1d_jxy, land1d_wtxy, land1d_ityplun)
+deallocate(land1d_topounit_index)
 deallocate(cols1d_ixy, cols1d_jxy, cols1d_wtxy, cols1d_ityplun)
 deallocate(pfts1d_ixy, pfts1d_jxy, pfts1d_wtxy, pfts1d_ityplun)
 deallocate(cols1d_lon, cols1d_lat, pfts1d_lon, pfts1d_lat)
@@ -693,6 +701,7 @@ call nc_define_dimension(ncid,'lon', nlon, routine)
 call nc_define_dimension(ncid,'lat', nlat, routine)
 
 call nc_define_dimension(ncid,'gridcell', ngridcell, routine)
+call nc_define_dimension(ncid,'topounit', ntopounit, routine)
 call nc_define_dimension(ncid,'landunit', nlandunit, routine)
 call nc_define_dimension(ncid,'column',   ncolumn,   routine)
 call nc_define_dimension(ncid,'pft',      npft,      routine)
@@ -2131,6 +2140,7 @@ integer :: mylevgrnd
 if (ncid == 0) ncid = nc_open_file_readonly(fname, routine)
 
 ngridcell = nc_get_dimension_size(ncid, 'gridcell', routine)
+ntopounit = nc_get_dimension_size(ncid, 'topounit', routine)
 nlandunit = nc_get_dimension_size(ncid, 'landunit', routine)
 ncolumn   = nc_get_dimension_size(ncid, 'column',   routine)
 npft      = nc_get_dimension_size(ncid, 'pft',      routine)
@@ -2162,6 +2172,7 @@ if ((debug > 1) .and. do_output()) then
    write(logfileunit,*)
    write(logfileunit,*)'get_sparse_dims output follows:'
    write(logfileunit,*)'ngridcell = ',ngridcell
+   write(logfileunit,*)'ntopounit = ',ntopounit
    write(logfileunit,*)'nlandunit = ',nlandunit
    write(logfileunit,*)'ncolumn   = ',ncolumn
    write(logfileunit,*)'npft      = ',npft
@@ -2175,6 +2186,7 @@ if ((debug > 1) .and. do_output()) then
    write(     *     ,*)
    write(     *     ,*)'get_sparse_dims output follows:'
    write(     *     ,*)'ngridcell = ',ngridcell
+   write(     *     ,*)'ntopounit = ',ntopounit
    write(     *     ,*)'nlandunit = ',nlandunit
    write(     *     ,*)'ncolumn   = ',ncolumn
    write(     *     ,*)'npft      = ',npft
@@ -2206,6 +2218,7 @@ character(len=*), intent(in)    :: cstat
 character(len=*), parameter :: routine = 'get_sparse_geog'
 
 real(r8), allocatable :: temp2d(:,:)
+integer :: iland, itopo
 
 if (ncid == 0) ncid = nc_open_file_readonly(fname, routine)
 
@@ -2214,6 +2227,11 @@ if (ncid == 0) ncid = nc_open_file_readonly(fname, routine)
 
 if ( ngridcell < 0 ) then
    write(string1,*)'Unable to read the number of gridcells.'
+   call error_handler(E_ERR,routine,string1,source)
+endif
+
+if ( ntopounit < 0 ) then
+   write(string1,*)'Unable to read the number of topographic units.'
    call error_handler(E_ERR,routine,string1,source)
 endif
 
@@ -2236,9 +2254,12 @@ endif
 
 call nc_get_variable(ncid, 'grid1d_ixy',     grid1d_ixy,     routine)
 call nc_get_variable(ncid, 'grid1d_jxy',     grid1d_jxy,     routine)
+call nc_get_variable(ncid, 'topo1d_ixy',     topo1d_ixy,     routine)
+call nc_get_variable(ncid, 'topo1d_jxy',     topo1d_jxy,     routine)
 call nc_get_variable(ncid, 'land1d_ixy',     land1d_ixy,     routine)
 call nc_get_variable(ncid, 'land1d_jxy',     land1d_jxy,     routine)
 call nc_get_variable(ncid, 'land1d_wtxy',    land1d_wtxy,    routine)
+call nc_get_variable(ncid, 'land1d_topounit_index', land1d_topounit_index, routine)
 call nc_get_variable(ncid, 'land1d_ityplun', land1d_ityplun, routine)
 call nc_get_variable(ncid, 'cols1d_ixy',     cols1d_ixy,     routine)
 call nc_get_variable(ncid, 'cols1d_jxy',     cols1d_jxy,     routine)
@@ -2252,6 +2273,18 @@ call nc_get_variable(ncid, 'pfts1d_wtxy',    pfts1d_wtxy,    routine)
 call nc_get_variable(ncid, 'pfts1d_lon',     pfts1d_lon,    routine)
 call nc_get_variable(ncid, 'pfts1d_lat',     pfts1d_lat,    routine)
 call nc_get_variable(ncid, 'pfts1d_ityplun', pfts1d_ityplun, routine)
+
+! ELM does not write a topounit weight directly. Derive each topounit's
+! gridcell-relative weight by summing the gridcell-relative landunit weights.
+topo1d_wtxy(:) = 0.0_r8
+do iland = 1, nlandunit
+   itopo = land1d_topounit_index(iland)
+   if (itopo < 1 .or. itopo > ntopounit) then
+      write(string1,*)'Invalid land1d_topounit_index ',itopo,' for landunit ',iland
+      call error_handler(E_ERR,routine,string1,source)
+   endif
+   topo1d_wtxy(itopo) = topo1d_wtxy(itopo) + land1d_wtxy(iland)
+enddo
 
 ! zsno is NOT optional ... so it IS a fatal error if it is not present (for now, anyway).
 ! as read into fortran ... zsno(1,:) is the level closest to the sun.
@@ -3140,7 +3173,7 @@ RELATEDLOOP: do jdim = 1, get_num_dims(dom_id, var_id)
 
    dimension_name = get_dim_name(dom_id, var_id, jdim)
    select case ( trim(dimension_name) )
-          case ("gridcell","lon","lat")
+          case ("gridcell","topounit","lon","lat")
              related = .true.
           case ("lndgrid")
              related = .true.
@@ -3206,6 +3239,22 @@ SELECT CASE ( trim(dimension_name) )
             lonixy(  indx) = xi
             latjxy(  indx) = xj
             landarea(indx) = AREA2D(xi,xj) * LANDFRAC2D(xi,xj)
+         endif
+         indx = indx + 1
+      enddo
+
+   CASE ("topounit")
+      do i = 1, dimension_length
+         xi = topo1d_ixy(i)
+         xj = topo1d_jxy(i)
+         if (unstructured) then
+            lonixy(  indx) = xi
+            latjxy(  indx) = xi
+            landarea(indx) = AREA1D(xi) * LANDFRAC1D(xi) * topo1d_wtxy(i)
+         else
+            lonixy(  indx) = xi
+            latjxy(  indx) = xj
+            landarea(indx) = AREA2D(xi,xj) * LANDFRAC2D(xi,xj) * topo1d_wtxy(i)
          endif
          indx = indx + 1
       enddo

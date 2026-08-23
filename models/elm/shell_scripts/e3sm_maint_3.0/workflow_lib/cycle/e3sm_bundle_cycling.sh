@@ -96,7 +96,7 @@ stage_handoff_member() (
   CASE_NAME="${my_casename}.${ENSTR}"
   CASE_DIR="${CASE_ROOT/EN01/${ENSTR}}"
   RUN_DIR="${RUN_ROOT/EN01/${ENSTR}}"
-  member_archive=$(my_member_archive_dir "${ENSTR}") || return 1
+  member_archive="${my_modeldir}/${ENSTR}/archive"
   eam_ic="${member_archive}/rest/${NEXT_DATE}-${NEXT_TOD}/${CASE_NAME}.eam.i.${NEXT_DATE}-${NEXT_TOD}.nc"
   run_ic="${RUN_DIR}/$(basename "${eam_ic}")"
   staged_ic="${run_ic}.handoff.${handoff_id}"
@@ -238,7 +238,7 @@ status_dir="${my_status_dir}"
 status_file="${status_dir}/cycle_complete.${NEXT_DATE}-${NEXT_TOD}"
 status_tmp="${status_file}.tmp.${SLURM_JOB_ID:-$$}"
 if ! mkdir -p "${status_dir}" ||
-   ! printf 'cycle=%s\nvalid_time=%s-%s\ncase=%s\nensemble_size=%s\narchive_layout=%s\ndart_root=%s\nslurm_job_id=%s\ncompleted_at=%s\n' "${DATA_ASSIMILATION_CYCLES}" "${NEXT_DATE}" "${NEXT_TOD}" "${my_casename}" "${my_ensnum}" "${my_raw_archive_layout}" "${my_dart_root}" "${SLURM_JOB_ID:-none}" "$(date '+%Y-%m-%d %H:%M:%S')" > "${status_tmp}" ||
+   ! printf 'cycle=%s\nvalid_time=%s-%s\ncase=%s\nensemble_size=%s\narchive_layout=%s\ndart_root=%s\nslurm_job_id=%s\ncompleted_at=%s\n' "${DATA_ASSIMILATION_CYCLES}" "${NEXT_DATE}" "${NEXT_TOD}" "${my_casename}" "${my_ensnum}" "per_member" "${my_dart_root}" "${SLURM_JOB_ID:-none}" "$(date '+%Y-%m-%d %H:%M:%S')" > "${status_tmp}" ||
    ! mv -f "${status_tmp}" "${status_file}"; then
   rm -f "${status_tmp}"
   rollback_committed_members

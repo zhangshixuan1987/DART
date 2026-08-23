@@ -116,7 +116,7 @@ elm_target_iso_time() {
 elm_find_history_record() {
   local enstr="$1" stream="$2" target="$3" candidate timestamp index member_archive
   local -a candidates=()
-  member_archive=$(my_member_archive_dir "${enstr}") || return 1
+  member_archive="${my_modeldir}/${enstr}/archive"
   while IFS= read -r -d '' candidate; do candidates+=("${candidate}"); done < <(
     find "${my_modeldir}/${enstr}/run" "${member_archive}/lnd/hist" -maxdepth 1 -type f \
       -name "${my_casename}.${enstr}.elm.${stream}.*.nc" -print0 2>/dev/null
@@ -149,6 +149,22 @@ elm_link_single_history_record() {
 }
 
 
+elm_validate_vector_record() {
+  local record="$1" source header variable
+  local -a required_variables=(NEE H2OSNO TLAI TWS SMP TV RH2M_R PBOT TBOT)
+  source=${record%|*}
+  header=$(ncdump -h "${source}" 2>/dev/null) || {
+    elm_fail "invalid vector history file: ${source}"
+    return 1
+  }
+  for variable in "${required_variables[@]}"; do
+    grep -Eq "^[[:space:]]*(byte|char|short|int|int64|float|double|ubyte|ushort|uint|uint64|string)[[:space:]]+${variable}\\(" <<< "${header}" || {
+      elm_fail "vector history file is missing ${variable}: ${source}"
+      return 1
+    }
+  done
+}
+
 elm_preflight() {
   local name executable i enstr restart history_record vector_record target_iso
   for name in my_ensnum my_elm_dart_nnodes my_task_per_node; do
@@ -176,7 +192,7 @@ elm_preflight() {
   fi
   for i in $(seq 1 "${my_ensnum}"); do
     enstr=$(printf 'EN%02d' "${i}")
-    member_archive=$(my_member_archive_dir "${enstr}") || return 1
+    member_archive="${my_modeldir}/${enstr}/archive"
     restart="${member_archive}/rest/${ELM_STAMP}/${my_casename}.${enstr}.elm.r.${ELM_STAMP}.nc"
     elm_require_file "${restart}" || return 1
     ncdump -h "${restart}" >/dev/null 2>&1 || elm_fail "invalid restart: ${restart}" || return 1
@@ -184,6 +200,7 @@ elm_preflight() {
     elm_link_single_history_record "${history_record}" "" "${target_iso}" || return 1
     if [[ -n "${my_elm_vector_history_stream}" ]]; then
       vector_record=$(elm_find_history_record "${enstr}" "${my_elm_vector_history_stream}" "${target_iso}") || return 1
+      elm_validate_vector_record "${vector_record}" || return 1
       elm_link_single_history_record "${vector_record}" "" "${target_iso}" || return 1
     fi
   done
@@ -241,7 +258,7 @@ cd "${ELM_DADIR}" || return 1
 ELM_TARGET_ISO=$(elm_target_iso_time) || return 1
 for i in $(seq 1 "${my_ensnum}"); do
   enstr=$(printf 'EN%02d' "${i}"); inst=$(printf '%04d' "${i}")
-  member_archive=$(my_member_archive_dir "${enstr}") || return 1
+  member_archive="${my_modeldir}/${enstr}/archive"
   restart_source="${member_archive}/rest/${ELM_STAMP}/${my_casename}.${enstr}.elm.r.${ELM_STAMP}.nc"
   ln -s "${restart_source}" elm.nc || return 1
   ./elm_to_dart > "elm_to_dart.${enstr}.log" 2>&1 || elm_fail "elm_to_dart failed for ${enstr}" || return 1
@@ -252,6 +269,7 @@ for i in $(seq 1 "${my_ensnum}"); do
   printf 'elm_history_%s.nc\n' "${inst}" >> history_files.txt
   if [[ -n "${my_elm_vector_history_stream}" ]]; then
     vector_record=$(elm_find_history_record "${enstr}" "${my_elm_vector_history_stream}" "${ELM_TARGET_ISO}") || return 1
+    elm_validate_vector_record "${vector_record}" || return 1
     elm_link_single_history_record "${vector_record}" "elm_vector_history_${inst}.nc" "${ELM_TARGET_ISO}" || return 1
     printf 'elm_vector_history_%s.nc\n' "${inst}" >> vector_files.txt
   fi
@@ -310,7 +328,7 @@ rm -f elm_restart.nc elm_history.nc elm_vector_history.nc || return 1
 # the archived target-time restart. A stale marker forces full reforecasting.
 for i in $(seq 1 "${my_ensnum}"); do
   enstr=$(printf 'EN%02d' "${i}"); inst=$(printf '%04d' "${i}")
-  member_archive=$(my_member_archive_dir "${enstr}") || return 1
+  member_archive="${my_modeldir}/${enstr}/archive"
   restart_target="${member_archive}/rest/${ELM_STAMP}/${my_casename}.${enstr}.elm.r.${ELM_STAMP}.nc"
   [[ -L "elm_restart_${inst}.nc" ]] || elm_fail "working restart is not a symlink for ${enstr}" || return 1
   [[ "$(readlink -f "elm_restart_${inst}.nc")" == "$(readlink -f "${restart_target}")" ]] || elm_fail "working restart target mismatch for ${enstr}" || return 1

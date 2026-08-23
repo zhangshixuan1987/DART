@@ -130,7 +130,7 @@ for i in `seq 1 ${my_ensnum}`;do
   echo === Member ${i} ===
   ENSTR=EN`printf "%02d" ${i}`
   DART_CASE=${my_casename}.${ENSTR}
-  MEMBER_ARCHIVE_DIR=$(my_member_archive_dir "${ENSTR}") || fail "cannot resolve archive for ${ENSTR}"
+  MEMBER_ARCHIVE_DIR="${my_modeldir}/${ENSTR}/archive"
   CASE_ARCHIVE_DIR="${MEMBER_ARCHIVE_DIR}/rest/${REF_DATE}-${REF_TOD}"
   echo "Run Case: ${DART_CASE}"
   echo "Run Directory: ${CASE_ARCHIVE_DIR}"
@@ -244,7 +244,7 @@ done
 # Validate every required component before declaring step 2 complete.
 for i in `seq 1 ${my_ensnum}`; do
   ENSTR=EN`printf "%02d" ${i}`
-  MEMBER_ARCHIVE_DIR=$(my_member_archive_dir "${ENSTR}") || fail "cannot resolve archive for ${ENSTR}"
+  MEMBER_ARCHIVE_DIR="${my_modeldir}/${ENSTR}/archive"
   member_prefix="${MEMBER_ARCHIVE_DIR}/rest/${REF_DATE}-${REF_TOD}/${my_casename}.${ENSTR}"
   required_files=("${member_prefix}.eam.i.${REF_DATE}-${REF_TOD}.nc" "${member_prefix}.elm.r.${REF_DATE}-${REF_TOD}.nc" "${member_prefix}.mosart.r.${REF_DATE}-${REF_TOD}.nc" "${member_prefix}.mpassi.rst.${REF_DATE}_${REF_TOD}.nc" "${member_prefix}.cpl.r.${REF_DATE}-${REF_TOD}.nc")
   [[ "${my_runtype}" == "Full-CPL" ]] && required_files+=("${member_prefix}.mpaso.rst.${REF_DATE}_${REF_TOD}.nc")
@@ -258,7 +258,7 @@ done
 # A successful regeneration makes any failed member-local Step 3 marker stale.
 for i in $(seq 1 "${my_ensnum}"); do
   ENSTR=$(printf 'EN%02d' "${i}")
-  MEMBER_ARCHIVE_DIR=$(my_member_archive_dir "${ENSTR}") || fail "cannot resolve archive for ${ENSTR}"
+  MEMBER_ARCHIVE_DIR="${my_modeldir}/${ENSTR}/archive"
   perturb_marker="${MEMBER_ARCHIVE_DIR}/rest/${REF_DATE}-${REF_TOD}/.dart_perturb_in_progress"
   if [[ -e "${perturb_marker}" ]]; then
     rm -f -- "${perturb_marker}" || fail "could not clear stale perturbation marker for ${ENSTR}"
@@ -266,7 +266,7 @@ for i in $(seq 1 "${my_ensnum}"); do
   fi
 done
 icbc_tmp="${icbc_status}.tmp.${SLURM_JOB_ID:-$$}"
-printf 'valid_time=%s-%s\ncase=%s\nensemble_size=%s\narchive_layout=%s\ndart_root=%s\nslurm_job_id=%s\ncompleted_at=%s\n' "${REF_DATE}" "${REF_TOD}" "${my_casename}" "${my_ensnum}" "${my_raw_archive_layout}" "${my_dart_root}" "${SLURM_JOB_ID:-none}" "$(date '+%Y-%m-%d %H:%M:%S')" > "${icbc_tmp}"
+printf 'valid_time=%s-%s\ncase=%s\nensemble_size=%s\narchive_layout=%s\ndart_root=%s\nslurm_job_id=%s\ncompleted_at=%s\n' "${REF_DATE}" "${REF_TOD}" "${my_casename}" "${my_ensnum}" "per_member" "${my_dart_root}" "${SLURM_JOB_ID:-none}" "$(date '+%Y-%m-%d %H:%M:%S')" > "${icbc_tmp}"
 mv -f "${icbc_tmp}" "${icbc_status}"
 rm -f -- "${icbc_in_progress}"
 echo "Wrote step-2 completion record: ${icbc_status}"

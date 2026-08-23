@@ -35,7 +35,7 @@ LIST='/usr/bin/ls'
 DART_ROOT="${my_eam_dart_code}"
 DART_MODEL=${my_eam_dart_model}
 DART_WORKDIR=${DART_ROOT}/models/${DART_MODEL}/work
-ARCHIVE_DIR=$(my_member_archive_dir "${POST_ENSTR}") || exit 20
+ARCHIVE_DIR="${my_modeldir}/${POST_ENSTR}/archive"
 MAP_FILE="${my_eam_post_map_file:?my_eam_post_map_file is not set}"
 
 # Dates
