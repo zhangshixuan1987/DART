@@ -57,5 +57,6 @@
    write_obs_every_cycle        = .false.,
    silence                      = .false.,
    
-   allow_missing_clm            = .false.
+   allow_missing_clm            = .false.,
+   allow_missing_elm            = .false.
    /
