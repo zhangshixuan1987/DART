@@ -153,7 +153,7 @@ fi
 #=========================================================================
 if [ ${my_ensnum} -eq 1 ]; then
   cd ${CURRENT_DADIR}
-  MEMBER_ARCHIVE_DIR=$(my_member_archive_dir EN01) || exit 31
+  MEMBER_ARCHIVE_DIR="${my_modeldir}/EN01/archive"
   ATM_INITIAL_FILENAME="${MEMBER_ARCHIVE_DIR}/rest/${ATM_DATE_EXT}/${DART_CASE}.eam.i.${ATM_DATE_EXT}.nc"
   if [ ! -f "${ATM_INITIAL_FILENAME}" ];then
     echo "ERROR: required file missing ${ATM_INITIAL_FILENAME}"
@@ -166,7 +166,7 @@ else
   for i in `seq 1 ${my_ensnum}`;do
     cd ${CURRENT_DADIR}
     ENSTR=EN`printf "%02d" ${i}`
-    MEMBER_ARCHIVE_DIR=$(my_member_archive_dir "${ENSTR}") || exit 32
+    MEMBER_ARCHIVE_DIR="${my_modeldir}/${ENSTR}/archive"
     ATM_INITIAL_FILENAME="${MEMBER_ARCHIVE_DIR}/rest/${ATM_DATE_EXT}/${DART_CASE}.${ENSTR}.eam.i.${ATM_DATE_EXT}.nc"
     if [ ! -f "${ATM_INITIAL_FILENAME}" ];then
       echo "ERROR: $ATM_INITIAL_FILENAME not exist!"
@@ -222,8 +222,7 @@ else
   inf_damping=0.9
 fi
 
-# Validate the complete table defensively, then resolve this cycle.
-validate_my_eam_cycle_overrides || exit 44
+# Resolve optional settings for this cycle; Step 4 validated the complete table during preflight.
 cycle_cutoff="${my_eam_cycle_overrides[${ATM_DATE_EXT}:localization_cutoff]:-}"
 cycle_inf_damping="${my_eam_cycle_overrides[${ATM_DATE_EXT}:inflation_damping]:-}"
 eam_no_obs_assim_above_level="${my_eam_cycle_overrides[${ATM_DATE_EXT}:no_obs_assim_above_level]:-${my_eam_no_obs_assim_above_level}}"
@@ -364,8 +363,8 @@ list=( `echo $list | sed -e "s#[=,']# #g"` )
 if [ "${list[1]}" == "SCALEHEIGHT" ]; then
    list1=`grep '^[ ]*vert_normalization_scale_height' input.nml `
    list1=( `echo $list1 | sed -e "s#[=,]##g"` )
-   if [ "${list1[1]}" != "1.5" ]; then
-      echo "WARNING!  input.nml is not using 1.5 for vert_normalization_scale_height."
+   if [ "${list1[1]}" != "${my_eam_vert_normalization_scale_height}" ]; then
+      echo "WARNING!  input.nml does not match configured vert_normalization_scale_height."
       echo "          Use a different value only if you definitely want to. "
    fi
 else
