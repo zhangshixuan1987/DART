@@ -81,6 +81,8 @@ restart_file_tool
 system_simulation
 dart_to_clm
 clm_to_dart
+dart_to_elm
+elm_to_dart
 wakeup_filter
 mpas_dart_obs_preprocess
 update_bc
