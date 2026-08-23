@@ -4,11 +4,11 @@
 % http://www.image.ucar.edu/DAReS/DART/DART_download
 
 % This is an example matlab script that checks met forcing variable
-% characteristics for CAM reanalysis.  This checks
+% characteristics for EAM reanalysis.  This checks
 % for missing time steps or suspicious variance across members 
 
 dirname = '/glade/campaign/collections/rda/data/d199001';
-dirname = '/glade/p/cisl/dares/thoar/CAM_DATM/4xdaily';
+dirname = '/glade/p/cisl/dares/thoar/ELM_DATM/4xdaily';
 
 % 	float a2x6h_Faxa_swndf(time, a2x6h_ny, a2x6h_nx) ;
 
@@ -24,7 +24,7 @@ if (exist('variance','var') ~= 1)
    for iyear = 2008:2008
    for imem = 1:members
    
-      filename = sprintf('%s/CAM_DATM.cpl_%04d.ha2x1dx6h.%d.nc', ...
+      filename = sprintf('%s/ELM_DATM.cpl_%04d.ha2x1dx6h.%d.nc', ...
                          dirname,imem,iyear);
 
    if ( exist(filename,'file') ~= 2)
@@ -164,11 +164,11 @@ end
 
 %%
 %% max swvdf is 3x bigger than the rest
-% /glade/p_old/image/thoar/CAM_DATM/4xdaily/CAM_DATM.cpl_0016.ha2x1dx6h.2008.nc has all the timesteps.
+% /glade/p_old/image/thoar/ELM_DATM/4xdaily/ELM_DATM.cpl_0016.ha2x1dx6h.2008.nc has all the timesteps.
 % 2008 0016 swvdf min 0.000000 max 1260.572998 
 %  time = 1460;
 %  a2x6h_ny = 96;
 %  a2x6h_nx = 144;
 %  members  = 80;
 
-% ncap2 -v a2x6h_Faxa_swvdf -d a2x6h_nx,143 -d a2x6h_ny,75 -d time,351 CAM_DATM.cpl_0064.ha2x1dx6h.2008.nc
+% ncap2 -v a2x6h_Faxa_swvdf -d a2x6h_nx,143 -d a2x6h_ny,75 -d time,351 ELM_DATM.cpl_0064.ha2x1dx6h.2008.nc

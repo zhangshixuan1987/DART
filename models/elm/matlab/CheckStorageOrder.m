@@ -1,7 +1,7 @@
 function bob = CheckStorageOrder(fname,varname)
 %% DART CheckStorageOrder - explore xxx(column,level) variable order.
 %
-% fname = 'clm_restart.nc';
+% fname = 'elm_restart.nc';
 % varname = 'H2OSOI_LIQ';
 % x = CheckStorageOrder(fname,varname);
 
