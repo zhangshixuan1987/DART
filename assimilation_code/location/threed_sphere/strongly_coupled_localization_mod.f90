@@ -7,7 +7,7 @@
 module strongly_coupled_localization_mod
 
 use      types_mod, only : r8, i8
-use  utilities_mod, only : error_handler, E_ERR, nmlfileunit, find_namelist_in_file, &
+use  utilities_mod, only : error_handler, E_ERR, E_DBG, nmlfileunit, find_namelist_in_file, &
                            check_namelist_read, do_nml_file, do_nml_term, to_upper
 use   location_mod, only : get_close_type, location_type, get_location, write_location
 use   ensemble_manager_mod, only : ensemble_type
@@ -119,7 +119,11 @@ integer:: i, bt
 
 if(.not. module_initialized) call initialize_module
 
-write(*, *) 'in get_close_state_strongly_coupled', strongly_coupled
+! Debug output revised: this routine is called frequently on every MPI rank.
+!write(*, *) 'in get_close_state_strongly_coupled', strongly_coupled
+write(msgstring, '(A,L1)') 'strongly_coupled = ', strongly_coupled
+call error_handler(E_DBG, 'get_close_state_strongly_coupled', &
+                   trim(msgstring), source)
 
 ! If strongly coupled is false, just return
 if(.not. strongly_coupled) return
