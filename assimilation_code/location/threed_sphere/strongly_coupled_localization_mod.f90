@@ -29,7 +29,7 @@ character(len = 512) :: errstring, msgstring, msgstring1, msgstring2
 
 !-----------------------------------------------------------------
 ! Namelist with default values
-! strongly_coupled -> logical, default false, 
+! strongly_coupled -> logical, default false,
 !     true if strongly coupled localization should be done
 ! state_model -> string specifying Earth system component for the assimilating model
 ! obs_model   -> string specifying Earth system component of model that generated obs
@@ -77,7 +77,7 @@ call to_upper(state_model_in)
 select case (trim(state_model_in))
    case('LAND')
       s_model = LAND
-   case('ATMOSPHERE') 
+   case('ATMOSPHERE')
       s_model = ATMOSPHERE
    case default
       write(errstring,*) 'state_model in strongly_coupled_localization_nml must be Atmosphere or LAND'
@@ -90,7 +90,7 @@ call to_upper(obs_model_in)
 select case (trim(obs_model_in))
    case('LAND')
       o_model = LAND
-   case('ATMOSPHERE') 
+   case('ATMOSPHERE')
       o_model = ATMOSPHERE
    case default
       write(errstring,*) 'obs_model in strongly_coupled_localization_nml must be Atmosphere or LAND'
@@ -112,7 +112,7 @@ integer,                       intent(inout) :: num_close, close_ind(:)
 real(r8),            optional, intent(inout) :: dist(:)
 type(ensemble_type), optional, intent(in)  :: ensemble_handle
 
-! Template for applying localization for strongly coupled 
+! Template for applying localization for strongly coupled
 real(r8):: obs_loc(3)
 real(r8):: state_loc(3), maxdist
 integer:: i, bt
@@ -128,7 +128,7 @@ call error_handler(E_DBG, 'get_close_state_strongly_coupled', &
 ! If strongly coupled is false, just return
 if(.not. strongly_coupled) return
 
-! Figure out the appropriate base_type classification to get the maximum localization 
+! Figure out the appropriate base_type classification to get the maximum localization
 ! distance for this observation
 if (base_type < 0) then
    if (gc%nt > 1) then
@@ -167,51 +167,55 @@ write(*, *) 'obs_loc ', obs_loc
 
 ! Have looked at doing localization of CLM obs as function of CAM model level or
 ! normalized scale height. To get normalized scale height, in cam model_nml
-! set vertical_localization_coord to SCALEHEIGHT and 
-! no_normalization_of_scale_heights to .false. 
+! set vertical_localization_coord to SCALEHEIGHT and
+! no_normalization_of_scale_heights to .false.
 ! This means the scale height of ps is 0 and values decrease as one moves up from the
 ! ps value.
 ! JLA CURRENTLY HARDCODING TO FORCE THE CONVERSION IN ASSIM_TOOLS
 ! What to do for missing_r8 for vertical location value?
 
 
-! Loop through state variables that are horizontally close and add in some vertical localizattion
-do i = 1, num_close
-   state_loc = get_location(locs(close_ind(i)))
-!!!write(*, *) 'stateloc', state_loc(1), state_loc(2), state_loc(3)
+! Loop through state variables that are horizontally close and add in some vertical localization.
+! dist is optional because callers may only request the close-state indices.  In
+! that case there are no distances to adjust.
+if (present(dist)) then
+   do i = 1, num_close
+      state_loc = get_location(locs(close_ind(i)))
+      !!!write(*, *) 'stateloc', state_loc(1), state_loc(2), state_loc(3)
 
-   ! Add on some additional distances 
-   ! Add on 20% of the maxdist just for being across the model boundary
-   dist(i) = dist(i) + 0.2_r8 * maxdist
+      ! Add on some additional distances
+      ! Add on 20% of the maxdist just for being across the model boundary
+      dist(i) = dist(i) + 0.2_r8 * maxdist
 
-   if(.false.) then
+      if(.false.) then
 
-      !------------------------------------------------------------------------------
-      ! This block is an example for vertical localization as function of model level
-      ! Surface variables have missing_r8 for vertical location for now
-      ! No additonal cost for surface
-      if(state_loc(3) >= 0.0_r8) then
-         ! Add on additional distance that is function of model level
-         ! Even more cheating by knowing the model has 32 levels and level 32 is at the surface
-         dist(i) = dist(i) + maxdist * (32 - state_loc(3)) / 10.0_r8
+         !------------------------------------------------------------------------------
+         ! This block is an example for vertical localization as function of model level
+         ! Surface variables have missing_r8 for vertical location for now
+         ! No additonal cost for surface
+         if(state_loc(3) >= 0.0_r8) then
+            ! Add on additional distance that is function of model level
+            ! Even more cheating by knowing the model has 32 levels and level 32 is at the surface
+            dist(i) = dist(i) + maxdist * (32 - state_loc(3)) / 10.0_r8
+         endif
+         !------------------------------------------------------------------------------
+
+      else
+
+         !------------------------------------------------------------------------------
+         ! This block is an example for vertical localization as function of
+         ! normalized scale height
+         ! Surface variables have missing_r8 for vertical location for now
+         ! No additonal cost for surface
+         if(state_loc(3) >= 0.0_r8) then
+            ! Add on additional distance that is function of normalized scale height
+            dist(i) = dist(i) + maxdist * state_loc(3) / 4.0_r8
+         endif
+         !------------------------------------------------------------------------------
       endif
-      !------------------------------------------------------------------------------
 
-   else
-
-      !------------------------------------------------------------------------------
-      ! This block is an example for vertical localization as function of 
-      ! normalized scale height
-      ! Surface variables have missing_r8 for vertical location for now
-      ! No additonal cost for surface
-      if(state_loc(3) >= 0.0_r8) then
-         ! Add on additional distance that is function of normalized scale height
-         dist(i) = dist(i) + maxdist * state_loc(3) / 4.0_r8
-      endif
-      !------------------------------------------------------------------------------
-   endif
-
-enddo
+   enddo
+endif
 
 end subroutine get_close_state_strongly_coupled
 
