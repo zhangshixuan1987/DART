@@ -1,1 +1,0 @@
-/qfs/people/zhan391/e3sm_dart_work/code/HOMME/ne30np4_latlon.nc
